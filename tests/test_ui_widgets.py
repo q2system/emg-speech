@@ -4,7 +4,7 @@ import numpy as np
 
 
 def test_static_waveform_shows_all_channels_or_emg_only(qt_app) -> None:
-    from ui.widgets import StaticWaveform
+    from emg_speech.ui.widgets import StaticWaveform
 
     widget = StaticWaveform()
     rng = np.random.default_rng(3)
@@ -29,7 +29,7 @@ def test_static_waveform_shows_all_channels_or_emg_only(qt_app) -> None:
 
 def test_take_preview_defaults_to_emg_only(tmp_path, qt_app) -> None:
     from emg_speech.dsp import ExtractedSample
-    from ui.acquisition_window import AcquisitionWindow
+    from emg_speech.ui.acquisition_window import AcquisitionWindow
 
     window = AcquisitionWindow(tmp_path)
     try:
@@ -61,7 +61,7 @@ def test_take_preview_defaults_to_emg_only(tmp_path, qt_app) -> None:
 
 
 def test_live_waveform_scrolls_with_a_fixed_window(qt_app) -> None:
-    from ui.widgets import LiveWaveform
+    from emg_speech.ui.widgets import LiveWaveform
 
     widget = LiveWaveform(capacity=5)
     widget.resize(420, 180)
@@ -102,7 +102,7 @@ def test_live_waveform_scrolls_with_a_fixed_window(qt_app) -> None:
 
 
 def test_inference_defaults_to_envelope_and_toggles_all_signals(qt_app) -> None:
-    from ui.inference_window import InferenceWindow
+    from emg_speech.ui.inference_window import InferenceWindow
 
     window = InferenceWindow()
     try:
@@ -118,7 +118,7 @@ def test_inference_defaults_to_envelope_and_toggles_all_signals(qt_app) -> None:
 
 
 def test_inference_connect_button_starts_and_stops(monkeypatch, qt_app) -> None:
-    from ui.inference_window import InferenceWindow
+    from emg_speech.ui.inference_window import InferenceWindow
 
     window = InferenceWindow()
     started: list[bool] = []
@@ -138,7 +138,7 @@ def test_inference_connect_button_starts_and_stops(monkeypatch, qt_app) -> None:
 
 def test_port_selector_accepts_manual_port_names(qt_app) -> None:
     from emg_speech.sources import PortInfo
-    from ui.widgets import PortSelector
+    from emg_speech.ui.widgets import PortSelector
 
     selector = PortSelector()
     assert selector.baudrate() == 921600
@@ -164,7 +164,7 @@ def test_port_selector_accepts_manual_port_names(qt_app) -> None:
 
 
 def test_port_selector_placeholder_is_not_a_port(qt_app) -> None:
-    from ui.widgets import PortSelector
+    from emg_speech.ui.widgets import PortSelector
 
     selector = PortSelector()
     selector.set_ports([], selected="")

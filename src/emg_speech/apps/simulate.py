@@ -5,26 +5,26 @@ event detection, live inference) without an ESP32.
 
 POSIX (Linux/macOS) — built-in virtual port, no extra software:
 
-    python -m apps.simulate --pty
+    python simulate.py --pty
     # prints e.g. "/dev/pts/5"; type that path into the app's port box
 
 Windows — require a com0com pair (see ``--setup-windows``):
 
-    python -m apps.simulate --setup-windows
-    python -m apps.simulate --port COM5 --baud 921600
-    python -m apps.acquire --port COM6 --baud 921600
+    python simulate.py --setup-windows
+    python simulate.py --port COM5 --baud 921600
+    python record.py --port COM6 --baud 921600
 
 Manual gesture control (type a word and press Enter):
 
-    python -m apps.simulate --pty --mode manual --words hello,world
+    python simulate.py --pty --mode manual --words hello,world
 
 Replay a recorded dataset instead of the synthetic generator:
 
-    python -m apps.simulate --pty --replay dataset
+    python simulate.py --pty --replay dataset
 
 Self-test without opening any port:
 
-    python -m apps.simulate --dry-run --duration 6
+    python simulate.py --dry-run --duration 6
 """
 
 from __future__ import annotations
@@ -61,9 +61,9 @@ Command Prompt:
 
 Start the simulator on one end and the GUI on the other:
 
-    python -m apps.simulate --port COM5 --baud 921600
-    python -m apps.acquire --port COM6 --baud 921600
-    python -m apps.infer   --checkpoint artifacts/model.pt --port COM6
+    python simulate.py --port COM5 --baud 921600
+    python record.py --port COM6 --baud 921600
+    python recognize.py   --checkpoint artifacts/model.pt --port COM6
 
 Both ends must be different ports of the pair: Windows does not allow two
 processes to open the same COM port.  The 921600 baud setting only matters for

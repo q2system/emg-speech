@@ -1,15 +1,56 @@
 # EMG Speech — subvocal recognition from a 9-channel ESP32 stream
 
-Two desktop applications built on one framework-free core:
+A complete acquisition, training and real-time recognition project.  It is
+built so that the part students need to read is intentionally tiny:
+
+## Start here: students
+
+| Action | Command | What it shows |
+|--------|---------|---------------|
+| Record examples | `python record.py` | One word per button hold |
+| Train a model | `python train.py` | Dataset → checkpoint |
+| Recognise live | `python recognize.py` | Checkpoint → text |
+| Test without hardware | `python simulate.py --pty` | Fake ESP32 stream |
+
+The only student-facing programs are:
+
+```
+record.py                record labelled examples (with printed steps)
+train.py                 train a classifier (with printed steps)
+recognize.py             run live recognition (with printed steps)
+simulate.py              create a fake ESP32 stream
+inspect_take.py          load and print one saved example
+docs/STUDENT_GUIDE.md    the classroom explanation
+```
+
+Everything difficult — serial framing, filters, event detection, PyTorch and
+the PyQt windows — is inside the **`emg_speech` library**.  Students can use the
+project without reading it, then open individual library modules when a lesson
+needs the details.
+
+The public API is just:
+
+```python
+from emg_speech import record, train_model, recognize, simulate
+```
+
+These imports work after `pip install -e .` (or any normal installation).  The
+four scripts also run directly from a checkout without installing the package.
+
+> **Students can stop after this section.**  The rest of this README is a
+> developer reference; `docs/STUDENT_GUIDE.md` explains the pipeline without
+> the implementation details.
+
+Two desktop applications are built on that library:
 
 | App | Entry point | Job |
 |-----|-------------|-----|
-| **Acquisition & annotation** | `python -m apps.acquire` | Record one word per button hold, detect the real muscle burst, normalise it to a fixed tensor, save `.npy` per class |
-| **Training & inference** | `python -m apps.train` / `python -m apps.infer` | Train a CNN + BiLSTM classifier, then stream UART, detect gestures and type recognised words live |
+| **Acquisition & annotation** | `python record.py` | Record one word per button hold, detect the real muscle burst, normalise it to a fixed tensor, save `.npy` per class |
+| **Training & inference** | `python train.py` / `python recognize.py` | Train a CNN + BiLSTM classifier, then stream UART, detect gestures and type recognised words live |
 
 The PyQt layer only renders state and forwards user intent. Serial I/O, DSP, file
-I/O and PyTorch all live in `emg_speech/` and run on worker threads, so the UI
-never blocks. `emg_speech/` is importable without Qt (and the DSP modules are
+I/O and PyTorch all live in `src/emg_speech/` and run on worker threads, so the
+UI never blocks. `emg_speech` is importable without Qt (and the DSP modules are
 importable without torch), which is enforced by `tests/test_architecture.py`.
 
 ---
@@ -17,7 +58,7 @@ importable without torch), which is enforced by `tests/test_architecture.py`.
 ## 1. Architecture
 
 ```
-              ┌─────────────── UI thread (PyQt6) ───────────────┐
+              ┌─────────── src/emg_speech/ui/ (PyQt6) ──────────┐
               │  AcquisitionWindow        InferenceWindow       │
               │  widgets / theme          transcript, meter     │
               └───────▲───────────────────────────▲─────────────┘
@@ -40,41 +81,51 @@ importable without torch), which is enforced by `tests/test_architecture.py`.
 ```
 
 Key rule: **one direction only.** UI → worker → core; results come back as
-signals. Nothing in `ui/` reads a serial port, applies a filter or touches a
-tensor.
+signals. Nothing in `src/emg_speech/ui/` reads a serial port, applies a filter
+or touches a tensor.
 
 ### Directory layout
 
 ```
-emg_speech/                 framework-free core
-    constants.py            channel order, file names, format version
-    config.py               DspConfig, DetectionConfig, ModelConfig, TrainConfig,
+LICENCE                     MIT license text
+README.md                   this file
+pyproject.toml              package metadata and build configuration
+MANIFEST.in                 extra files for the source distribution
+requirements.txt            runtime dependencies for `pip install -r`
+
+record.py                   direct entry script: record examples
+train.py                    direct entry script: train a model
+recognize.py                direct entry script: live recognition
+simulate.py                 direct entry script: fake serial stream
+inspect_take.py             view one saved .npy example
+_bootstrap.py               lets the scripts import from src/ in a checkout
+
+src/
+    emg_speech/             the library — all implementation
+        __init__.py         exports record, train_model, recognize, simulate
+        api.py              the small public API used by the scripts
+        constants.py        channel order, file names, format version
+        config.py           DspConfig, DetectionConfig, ModelConfig, TrainConfig,
                             DatasetMeta + UART bandwidth helpers
-    protocol.py             defensive UART line -> (9,) float32 frame
-    sources.py              SerialSource/Writer, PtyWriter, ReplaySource,
+        protocol.py         defensive UART line -> (9,) float32 frame
+        sources.py          SerialSource/Writer, PtyWriter, ReplaySource,
                             port discovery
-    ring_buffer.py          lock-free-enough frame ring for take extraction
-    dsp.py                  causal filters, EventDetector, extract_sample,
+        ring_buffer.py      lock-free-enough frame ring for take extraction
+        dsp.py              causal filters, EventDetector, extract_sample,
                             time normalisation, NoiseProfile
-    storage.py              class folders, atomic .npy writes, dataset scan
-    dataset.py              DatasetIndex, EMGDataset, NormStats, splits, weights
-    model.py                EMGSequenceClassifier, checkpoint save/load
-    train.py                training loop, metrics, early stopping
-    inference.py            StreamingRecognizer state machine
-    synthetic.py            hardware-free dataset generator
-    simulator.py            live raw-signal source for virtual serial testing
-ui/                         PyQt6 only
-    theme.py                dark stylesheet
-    widgets.py              LiveWaveform, StaticWaveform, LevelMeter, PortSelector
-    workers.py              SerialReaderThread, InferenceThread, ExtractionTask
-    acquisition_window.py   App 1 controller/view
-    inference_window.py     App 2 controller/view
-    app.py                  QApplication bootstrap
-apps/                       thin CLI wrappers
-    acquire.py  train.py  infer.py  simulate.py
-tests/                      75 pytest tests (protocol, DSP, storage, model,
-                            training, inference, simulator/PTY, architecture, UI)
-docs/prompt-simple.md       original specification
+        storage.py          class folders, atomic .npy writes, dataset scan
+        dataset.py          DatasetIndex, EMGDataset, NormStats, splits, weights
+        model.py            EMGSequenceClassifier, checkpoint save/load
+        train.py            training loop, metrics, early stopping
+        inference.py        StreamingRecognizer state machine
+        synthetic.py        hardware-free dataset generator
+        simulator.py        live raw-signal source for virtual serial testing
+        ui/                 PyQt6 presentation layer (internal)
+        apps/               CLI wrappers used by the scripts (internal)
+docs/STUDENT_GUIDE.md       simple explanation for a classroom
+docs/PUBLISHING.md          install remotely / publish to PyPI
+tests/                      test suite (protocol, DSP, storage, model,
+                            training, inference, simulator/PTY, UI, architecture)
 ```
 
 ### UART protocol
@@ -271,33 +322,67 @@ thread.start()
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-# or: pip install -e ".[dev]"
+
+# Recommended: install this project in editable mode.
+python -m pip install -e ".[dev]"
+
+# Or install only the runtime dependencies.  The four scripts still run from
+# a checkout because _bootstrap.py adds src/ to sys.path, but the installed
+# console commands and `python -m emg_speech...` need the editable install.
+# pip install -r requirements.txt
 ```
 
 Requires Python ≥ 3.10, `numpy`, `scipy`, `pyserial`, `torch`, `PyQt6`
 (`pytest` for the test suite). CUDA/XPU/MPS is used automatically when
-available (`--device auto`).
+available (`--device auto`).  The package uses the standard `src/` layout from
+the [Python Packaging User Guide](https://packaging.python.org/en/latest/tutorials/packaging-projects/).
+
+### Install on another computer
+
+The project is a normal Python package.  After pushing it to a Git repository:
+
+```bash
+pip install "git+https://github.com/<your-user>/<your-repo>.git"
+```
+
+Or, after publishing to PyPI:
+
+```bash
+pip install emg-speech
+```
+
+This installs the library and four console commands:
+
+```bash
+emg-record --help
+emg-train --help
+emg-recognize --help
+emg-simulate --help
+```
+
+`docs/PUBLISHING.md` contains the full build, TestPyPI, PyPI and API-token
+instructions.  Datasets and `artifacts/` are **not** packaged; create them on
+the target machine using `emg-record` / `emg-train`.
 
 ### No-hardware demo
 
 ```bash
 # 1. 4 classes x 20 synthetic takes through the real DSP pipeline
-python -m emg_speech.synthetic --out dataset_demo
+emg-demo-data --out dataset_demo
 
 # 2. train (CPU is fine)
-python -m apps.train --data dataset_demo --out artifacts/model.pt --epochs 20
+python train.py --data dataset_demo --out artifacts/model.pt --epochs 20
 
 # 3. replay the dataset through the live UI
-python -m apps.infer --checkpoint artifacts/model.pt --replay dataset_demo
+python recognize.py --checkpoint artifacts/model.pt --replay dataset_demo
 ```
 
 ### With hardware
 
 ```bash
-python -m apps.acquire --data dataset --port /dev/ttyUSB0 --baud 921600
-python -m apps.train   --data dataset --out artifacts/model.pt --epochs 60
-python -m apps.infer   --checkpoint artifacts/model.pt --port /dev/ttyUSB0 --baud 921600
+python record.py --data dataset --port /dev/ttyUSB0 --baud 921600
+python train.py   --data dataset --out artifacts/model.pt --epochs 60
+python recognize.py   --checkpoint artifacts/model.pt --port /dev/ttyUSB0 --baud 921600
 ```
 
 Use `--port COM5` on Windows. The firmware must sample and transmit at the same
@@ -312,13 +397,13 @@ your typed name, so a temporarily unplugged adapter does not clear the field.
 On the command line the same applies:
 
 ```bash
-python -m apps.acquire --data dataset --port COM3 --baud 921600
-python -m apps.infer --checkpoint artifacts/model.pt --port COM3
+python record.py --data dataset --port COM3 --baud 921600
+python recognize.py --checkpoint artifacts/model.pt --port COM3
 ```
 
 #### Virtual serial testing (no ESP32)
 
-`apps.simulate` generates a continuous **raw** 9-channel stream (idle noise +
+The simulator generates a continuous **raw** 9-channel stream (idle noise +
 class-specific bursts and motion) and writes it to a serial endpoint. It does
 not replay normalised dataset samples: the acquisition window, the threaded
 serial reader, the DSP/detector and the inference state machine all run exactly
@@ -328,10 +413,10 @@ On Linux/macOS, `--pty` creates a virtual pair with no extra dependencies:
 
 ```bash
 # terminal 1 — note the printed path, e.g. /dev/pts/7
-python -m apps.simulate --pty
+python simulate.py --pty
 
 # terminal 2 — type /dev/pts/7 into the port box, or:
-python -m apps.acquire --data dataset --port /dev/pts/7
+python record.py --data dataset --port /dev/pts/7
 ```
 
 `auto` mode emits a gesture every `--interval` seconds and prints a cue; press
@@ -339,7 +424,7 @@ and hold record around the cue. `manual` mode is best for annotation practice �
 type a word and press Enter while the record button is held:
 
 ```bash
-python -m apps.simulate --pty --mode manual --words hello,world
+python simulate.py --pty --mode manual --words hello,world
 # [sim] 1.23s gesture 'hello'
 ```
 
@@ -347,8 +432,8 @@ Inference over the fake UART (the bundled demo checkpoint understands the
 default vocabulary):
 
 ```bash
-python -m apps.simulate --pty --interval 1.5
-python -m apps.infer --checkpoint artifacts/model.pt --port /dev/pts/7
+python simulate.py --pty --interval 1.5
+python recognize.py --checkpoint artifacts/model.pt --port /dev/pts/7
 ```
 
 Useful flags: `--noise`, `--amplitude`, `--start-idle`, `--seed`,
@@ -360,16 +445,16 @@ On **Windows**, create a null-modem pair once with
 
 ```bat
 setupc.exe install PortName=COM5 PortName=COM6
-python -m apps.simulate --setup-windows     :: prints the same recipe
+python simulate.py --setup-windows     :: prints the same recipe
 ```
 
 Then run the simulator on one end and the app on the **other** end (Windows
 does not let two processes open the same COM port):
 
 ```bat
-python -m apps.simulate --port COM5 --baud 921600
-python -m apps.acquire --port COM6 --baud 921600
-python -m apps.infer   --checkpoint artifacts\model.pt --port COM6
+python simulate.py --port COM5 --baud 921600
+python record.py --port COM6 --baud 921600
+python recognize.py   --checkpoint artifacts\model.pt --port COM6
 ```
 
 A virtual pair ignores the physical baud rate, but keep the same value on both
@@ -441,12 +526,12 @@ Notes:
 QT_QPA_PLATFORM=offscreen PYTHONPATH=. python -m pytest -q
 ```
 
-75 tests cover protocol edge cases, filter/detector behaviour, normalisation,
+83 tests cover protocol edge cases, filter/detector behaviour, normalisation,
 atomic storage, dataset remapping, model/checkpoint round-trips, training,
 streaming inference, the live simulator (including a POSIX PTY round-trip),
-layer boundaries and offscreen UI tests for manual COM-port entry, the
-3/9-channel take preview, inference connect wiring, and the scrolling
-all-signal view.
+the public library API, the four directly runnable entry scripts, layer
+boundaries and offscreen UI tests for manual COM-port entry, the 3/9-channel
+take preview, inference connect wiring, and the scrolling all-signal view.
 
 ---
 

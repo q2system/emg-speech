@@ -1,8 +1,8 @@
 """Launch the real-time inference tool.
 
-    python -m apps.infer --checkpoint artifacts/model.pt --port /dev/ttyUSB0
-    python -m apps.infer --checkpoint artifacts/model.pt --port COM6
-    python -m apps.infer --checkpoint artifacts/model.pt --replay dataset_demo
+    python recognize.py --checkpoint artifacts/model.pt --port /dev/ttyUSB0
+    python recognize.py --checkpoint artifacts/model.pt --port COM6
+    python recognize.py --checkpoint artifacts/model.pt --replay dataset_demo
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ def main(argv: list[str] | None = None) -> int:
     if not checkpoint.exists():
         print(
             f"Checkpoint '{checkpoint}' not found. Train one first:\n"
-            f"  python -m apps.train --data dataset --out {checkpoint}",
+            f"  python train.py --data dataset --out {checkpoint}",
             file=sys.stderr,
         )
         return 1
@@ -48,7 +48,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        from ui.app import run_inference
+        from emg_speech.ui.app import run_inference
     except ImportError as exc:  # pragma: no cover - dependency hint
         print(f"Could not start the GUI: {exc}", file=sys.stderr)
         print("Install the desktop dependencies with: pip install -r requirements.txt", file=sys.stderr)

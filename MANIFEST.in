@@ -1,0 +1,13 @@
+include LICENCE
+include README.md
+include requirements.txt
+include _bootstrap.py
+include record.py
+include train.py
+include recognize.py
+include simulate.py
+include inspect_take.py
+recursive-include docs *.md
+recursive-include tests *.py
+global-exclude *.py[cod]
+prune src/emg_speech.egg-info

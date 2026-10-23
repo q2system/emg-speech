@@ -3,8 +3,21 @@ from __future__ import annotations
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CORE = ROOT / "emg_speech"
-UI = ROOT / "ui"
+CORE = ROOT / "src" / "emg_speech"
+UI = CORE / "ui"
+
+
+def test_library_owns_the_implementation() -> None:
+    """Students should see one src/ library and four direct entry scripts."""
+
+    assert CORE.is_dir()
+    assert not (ROOT / "emg_speech").exists()
+    assert not (ROOT / "ui").exists()
+    assert not (ROOT / "apps").exists()
+    for name in ("record.py", "train.py", "recognize.py", "simulate.py"):
+        script = ROOT / name
+        assert script.exists()
+        assert len(script.read_text(encoding="utf-8").splitlines()) < 95
 
 
 def test_core_never_imports_qt() -> None:
@@ -41,8 +54,8 @@ def test_ui_uses_the_core_engines() -> None:
 def test_ui_smoke(demo_dataset: Path, qt_app) -> None:
     from PyQt6.QtWidgets import QApplication
 
-    from ui.acquisition_window import AcquisitionWindow
-    from ui.inference_window import InferenceWindow
+    from emg_speech.ui.acquisition_window import AcquisitionWindow
+    from emg_speech.ui.inference_window import InferenceWindow
 
     acquisition = AcquisitionWindow(demo_dataset)
     try:

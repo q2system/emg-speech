@@ -23,7 +23,7 @@ def qt_app():
     pytest.importorskip("PyQt6")
     from PyQt6.QtWidgets import QApplication
 
-    from ui.theme import apply_theme
+    from emg_speech.ui.theme import apply_theme
 
     app = QApplication.instance() or QApplication([])
     apply_theme(app)

@@ -1,7 +1,7 @@
 """Launch the data acquisition & annotation tool.
 
-    python -m apps.acquire --data dataset --port /dev/ttyUSB0 --baud 921600
-    python -m apps.acquire --data dataset --port COM6 --baud 921600
+    python record.py --data dataset --port /dev/ttyUSB0 --baud 921600
+    python record.py --data dataset --port COM6 --baud 921600
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        from ui.app import run_acquisition
+        from emg_speech.ui.app import run_acquisition
     except ImportError as exc:  # pragma: no cover - dependency hint
         print(f"Could not start the GUI: {exc}", file=sys.stderr)
         print("Install the desktop dependencies with: pip install -r requirements.txt", file=sys.stderr)

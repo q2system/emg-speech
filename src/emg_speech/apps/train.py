@@ -1,6 +1,6 @@
 """Train the LSTM classifier from a recorded dataset.
 
-    python -m apps.train --data dataset --out artifacts/model.pt --epochs 40
+    python train.py --data dataset --out artifacts/model.pt --epochs 40
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ def _print_confusion(report) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Train the EMG sequence classifier")
-    parser.add_argument("--data", default="dataset", help="dataset folder from apps.acquire")
+    parser.add_argument("--data", default="dataset", help="dataset folder from `python record.py`")
     parser.add_argument("--out", default="artifacts/model.pt", help="output checkpoint")
     parser.add_argument("--epochs", type=int, default=40)
     parser.add_argument("--batch-size", type=int, default=32)

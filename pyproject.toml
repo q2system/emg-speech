@@ -1,13 +1,29 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "emg-speech"
+# TODO: bump this before every PyPI upload. PyPI rejects duplicate versions.
 version = "1.0.0"
 description = "Subvocal EMG speech recognition: acquisition, training and real-time inference"
 readme = "README.md"
 requires-python = ">=3.10"
+keywords = ["emg", "speech", "biosignals", "esp32", "pytorch"]
+
+# ---------------------------------------------------------------------------
+# Publishing metadata.  Author, license and repository links are filled in.
+# Bump the version for every upload; see docs/PUBLISHING.md.
+# ---------------------------------------------------------------------------
+authors = [
+    { name = "Hosam Hatim Osman", email = "hosam.bosati@gmail.com" },
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
 dependencies = [
     "numpy>=1.24",
     "scipy>=1.10",
@@ -17,18 +33,31 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "build>=1.0", "twine>=5.0"]
 
 [project.scripts]
-emg-acquire = "apps.acquire:main"
-emg-infer = "apps.infer:main"
-emg-train = "apps.train:main"
+emg-record = "emg_speech.apps.acquire:main"
+emg-acquire = "emg_speech.apps.acquire:main"
+emg-train = "emg_speech.apps.train:main"
+emg-recognize = "emg_speech.apps.infer:main"
+emg-infer = "emg_speech.apps.infer:main"
+emg-simulate = "emg_speech.apps.simulate:main"
 emg-demo-data = "emg_speech.synthetic:main"
-emg-simulate = "apps.simulate:main"
+
+# Project links.
+[project.urls]
+Homepage = "https://github.com/q2system/emg-speech"
+Repository = "https://github.com/q2system/emg-speech"
+Issues = "https://github.com/q2system/emg-speech/issues"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
-include = ["emg_speech*", "ui*", "apps*"]
+where = ["src"]
+include = ["emg_speech*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 addopts = "-q"

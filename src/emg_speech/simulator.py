@@ -18,7 +18,7 @@ Two modes are available:
     the acquisition workflow.
 
 The class implements the :class:`emg_speech.sources.FrameSource` protocol, but
-it has no serial dependency: ``apps.simulate`` decides whether frames go to a
+it has no serial dependency: ``simulate.py`` decides whether frames go to a
 real COM port, a com0com pair or a POSIX PTY.
 """
 

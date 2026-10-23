@@ -9,4 +9,7 @@ artifacts/
 *.pt
 transcript.txt
 .pytest_cache/
+build/
+dist/
+*.egg-info/
 .DS_Store
