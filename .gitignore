@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+dataset/
+dataset_*/
+artifacts/
+*.npy
+*.pt
+transcript.txt
+.pytest_cache/
+.DS_Store

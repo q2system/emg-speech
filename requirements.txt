@@ -1,0 +1,11 @@
+# Core runtime
+numpy>=1.24
+scipy>=1.10
+pyserial>=3.5
+torch>=2.1
+
+# Desktop UI
+PyQt6>=6.5
+
+# Development / tests
+pytest>=8
