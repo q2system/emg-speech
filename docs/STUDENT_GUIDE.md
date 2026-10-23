@@ -30,7 +30,7 @@ One saved example has shape **`(128, 9)`**:
 ## The three core operations
 
 The Python snippets below assume the package is installed
-(`pip install -e .`).  The four scripts run directly from a checkout.
+(`pip install -e .`).  The entry scripts run directly from a checkout.
 
 ### 1. Record
 
@@ -69,13 +69,23 @@ recognize("artifacts/model.pt")
 This opens the live window.  The library reads the serial stream, detects a
 burst, classifies it, and adds the predicted word to the transcript.
 
-## Run the four scripts directly
+## Run the five scripts directly
 
 ```bash
+python configure.py --sample-rate 500 --seq-len 128  # 0. set the signal shape
 python record.py       # 1. record labelled examples
 python train.py        # 2. train a model
 python recognize.py    # 3. recognise words live
 python simulate.py --pty  # optional: fake ESP32 stream
+```
+
+`configure.py` writes `emg_config.json` in the current folder.  The other
+scripts read it automatically, so the sample rate and sequence length only
+need to be typed once.  The installed command `emg-config` does the same thing.
+
+```bash
+emg-config --sample-rate 1000 --seq-len 256
+emg-config                # show the current values
 ```
 
 Use `python simulate.py --pty` to create a fake ESP32 serial port for
@@ -92,6 +102,7 @@ Only these top-level files are meant to be read by students:
 
 | Path | Purpose |
 |------|---------|
+| `configure.py` | Write `emg_config.json` for the whole project. |
 | `record.py` | Open the acquisition window. |
 | `train.py` | Train and save a model. |
 | `recognize.py` | Open the live recognition window. |
@@ -100,8 +111,8 @@ Only these top-level files are meant to be read by students:
 | `docs/STUDENT_GUIDE.md` | This explanation. |
 
 Everything else is the library.  It uses the standard `src/` layout, so the
-package lives under `src/emg_speech/`; `_bootstrap.py` only helps the four
-scripts find it when you run them directly from a checkout.
+package lives under `src/emg_speech/`; `_bootstrap.py` only helps the scripts
+find it when you run them directly from a checkout.
 
 | Library folder | Responsibility |
 |----------------|----------------|
@@ -114,7 +125,7 @@ scripts find it when you run them directly from a checkout.
 | `src/emg_speech/train.py` | Training loop and metrics. |
 | `src/emg_speech/inference.py` | Real-time state machine. |
 | `src/emg_speech/ui/` | PyQt windows, widgets and worker threads. |
-| `src/emg_speech/apps/` | Command-line wrappers used by the four scripts. |
+| `src/emg_speech/apps/` | Command-line wrappers used by the entry scripts. |
 
 The UI never performs signal processing itself.  It sends data to worker
 threads and displays the results that come back.  That is why the windows stay
@@ -132,7 +143,13 @@ responsive while the model is working.
 
 ## One important setting
 
-The sample rate in the dataset configuration must match the firmware.  At
-**500 Hz**, there are **2 ms** between frames.  A firmware that sends one frame
-every 10 ms is running at **100 Hz**, and the filters, burst timing, and model
-window will not match a 500 Hz checkpoint.
+The sample rate must match the firmware.  At **500 Hz**, there are **2 ms**
+between frames.  A firmware that sends one frame every 10 ms is running at
+**100 Hz**, and the filters, burst timing, and model window will not match a
+500 Hz checkpoint.
+
+Set it once with `python configure.py --sample-rate 500 --seq-len 128` (or
+`emg-config`).  New datasets copy those values into `dataset/dataset.json`.
+That file and the trained checkpoint are authoritative after data exists, so
+the tools refuse to train or run inference with a config that disagrees with
+them.

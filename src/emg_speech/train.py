@@ -15,7 +15,12 @@ from numpy.typing import NDArray
 from torch import Tensor, nn
 from torch.utils.data import DataLoader
 
-from .config import ModelConfig, TrainConfig
+from .config import (
+    ModelConfig,
+    ProjectConfig,
+    TrainConfig,
+    ensure_project_config_matches,
+)
 from .constants import N_CHANNELS
 from .dataset import (
     DatasetIndex,
@@ -207,6 +212,7 @@ def train(
     train_config: TrainConfig | None = None,
     model_config: ModelConfig | None = None,
     on_epoch: Callable[[EpochMetrics], None] | None = None,
+    project_config: ProjectConfig | None = None,
 ) -> TrainingReport:
     """Train a sequence classifier and save the best checkpoint.
 
@@ -219,6 +225,13 @@ def train(
     _seed_everything(cfg.seed)
 
     index = DatasetIndex.build(dataset_root)
+    if project_config is not None:
+        ensure_project_config_matches(
+            project_config,
+            sample_rate=index.meta.sample_rate,
+            seq_len=index.meta.seq_len,
+            artifact=f"dataset '{index.root}'",
+        )
     if index.n_classes < 2:
         raise TrainingError(
             "At least two classes are required. Add another word to the dataset."

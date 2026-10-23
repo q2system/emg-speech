@@ -2,6 +2,7 @@ include LICENCE
 include README.md
 include requirements.txt
 include _bootstrap.py
+include configure.py
 include record.py
 include train.py
 include recognize.py

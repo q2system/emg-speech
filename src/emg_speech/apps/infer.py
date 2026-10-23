@@ -19,6 +19,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--checkpoint", default="artifacts/model.pt", help="trained .pt checkpoint"
     )
+    parser.add_argument(
+        "--config",
+        default=None,
+        metavar="PATH",
+        help="project config (default: ./emg_config.json when present)",
+    )
     parser.add_argument("--port", default=None, help="serial port (ignored with --replay)")
     parser.add_argument("--baud", type=int, default=DEFAULT_BAUDRATE, help="UART baud rate")
     parser.add_argument(
@@ -60,6 +66,7 @@ def main(argv: list[str] | None = None) -> int:
         port=args.port,
         baudrate=args.baud,
         min_confidence=args.min_confidence,
+        config_path=args.config,
     )
 
 

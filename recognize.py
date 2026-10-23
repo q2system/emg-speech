@@ -1,15 +1,11 @@
 """Recognise words from a live 9-channel EMG stream.
 
-Steps:
-    1. Read the checkpoint (model weights, labels and DSP settings).
+    1. Read the checkpoint (weights, labels and DSP settings).
     2. Connect to the ESP32, or replay a recorded dataset.
-    3. Calibrate on a short silence, then listen for muscle bursts.
-    4. Detect a burst, classify it, and type the recognised word.
+    3. Detect each muscle burst, classify it, and type the word.
 
 Run:
-    python recognize.py
     python recognize.py --checkpoint artifacts/model.pt --port /dev/ttyUSB0
-    python recognize.py --checkpoint artifacts/model.pt --replay dataset_demo
 """
 
 from __future__ import annotations
@@ -31,6 +27,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--checkpoint", default="artifacts/model.pt", help="trained model")
     parser.add_argument("--port", default=None, help="serial port, e.g. /dev/ttyUSB0 or COM5")
     parser.add_argument("--baud", type=int, default=DEFAULT_BAUDRATE, help="UART baud rate")
+    parser.add_argument(
+        "--config",
+        default=None,
+        metavar="PATH",
+        help="project config (default: ./emg_config.json when present)",
+    )
     parser.add_argument(
         "--replay",
         default=None,
@@ -75,8 +77,8 @@ def main() -> int:
         input_description = f"serial port {args.port or '(choose in window)'}"
 
     print("[3/4] Input:", input_description)
+    print("      Config:", args.config or "emg_config.json (if present)")
     print("[4/4] Opening the recognition window...")
-    print("      The firmware must send frames at the sample rate shown above.")
 
     return recognize(
         checkpoint,
@@ -84,6 +86,7 @@ def main() -> int:
         replay=args.replay,
         baudrate=args.baud,
         min_confidence=args.min_confidence,
+        config_path=args.config,
     )
 
 

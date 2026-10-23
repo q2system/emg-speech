@@ -19,7 +19,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
-from .config import DEFAULT_BAUDRATE, TrainConfig
+from .config import DEFAULT_BAUDRATE, TrainConfig, load_project_config
 
 
 def record(
@@ -27,6 +27,7 @@ def record(
     *,
     port: str | None = None,
     baudrate: int = DEFAULT_BAUDRATE,
+    config_path: str | Path | None = None,
 ) -> int:
     """Open the acquisition window and record labelled examples.
 
@@ -35,6 +36,8 @@ def record(
         port: Serial port such as ``/dev/ttyUSB0`` or ``COM5``.  If omitted,
             the port can be typed into the window.
         baudrate: UART speed.  It must match the ESP32 firmware.
+        config_path: Optional project config.  The default is
+            ``./emg_config.json`` when that file exists.
 
     Returns:
         The Qt application exit code.
@@ -42,7 +45,12 @@ def record(
 
     from .ui.app import run_acquisition
 
-    return run_acquisition(dataset, port=port, baudrate=baudrate)
+    return run_acquisition(
+        dataset,
+        port=port,
+        baudrate=baudrate,
+        config_path=config_path,
+    )
 
 
 def train_model(
@@ -52,6 +60,7 @@ def train_model(
     epochs: int = 40,
     device: str = "auto",
     on_epoch: Callable[[Any], None] | None = None,
+    config_path: str | Path | None = None,
 ) -> Any:
     """Train a classifier from a recorded dataset and save a checkpoint.
 
@@ -61,6 +70,8 @@ def train_model(
         epochs: Maximum number of training epochs.
         device: ``"auto"``, ``"cpu"``, ``"cuda"``, ``"xpu"`` or ``"mps"``.
         on_epoch: Optional callback receiving one metrics object per epoch.
+        config_path: Optional project config.  When present, its signal shape
+            must match ``dataset/dataset.json``.
 
     Returns:
         A training report containing validation metrics and the label map.
@@ -68,21 +79,30 @@ def train_model(
 
     from .train import train
 
+    project_config = load_project_config(
+        config_path, required=config_path is not None
+    )
     config = TrainConfig(epochs=epochs, device=device)
     return train(
         dataset,
         checkpoint,
         train_config=config,
         on_epoch=on_epoch,
+        project_config=project_config,
     )
 
 
-def simulate(*options: str) -> int:
+def simulate(
+    *options: str,
+    config_path: str | Path | None = None,
+) -> int:
     """Run the fake ESP32 stream.
 
     Args:
         *options: Command-line options forwarded to the simulator, for example
             ``"--pty"`` or ``"--port", "COM5"``.
+        config_path: Optional project config; otherwise the simulator uses
+            ``./emg_config.json`` when present.
 
     Returns:
         The simulator exit code.
@@ -90,6 +110,8 @@ def simulate(*options: str) -> int:
 
     from .apps.simulate import main as run_simulator
 
+    if config_path is not None:
+        options = (*options, "--config", str(config_path))
     return run_simulator(list(options))
 
 
@@ -100,6 +122,7 @@ def recognize(
     replay: str | Path | None = None,
     baudrate: int = DEFAULT_BAUDRATE,
     min_confidence: float = 0.5,
+    config_path: str | Path | None = None,
 ) -> int:
     """Open the real-time recognition window.
 
@@ -109,6 +132,8 @@ def recognize(
         replay: Optional recorded dataset to play instead of a live serial port.
         baudrate: UART speed.  It must match the ESP32 firmware.
         min_confidence: Minimum probability required to type a word.
+        config_path: Optional project config.  When present, its signal shape
+            must match the checkpoint metadata.
 
     Returns:
         The Qt application exit code.
@@ -122,4 +147,5 @@ def recognize(
         port=port,
         baudrate=baudrate,
         min_confidence=min_confidence,
+        config_path=config_path,
     )

@@ -9,6 +9,7 @@ Steps:
 Run:
     python record.py
     python record.py --data dataset --port /dev/ttyUSB0 --baud 921600
+    python record.py --config emg_config.json
 """
 
 from __future__ import annotations
@@ -29,6 +30,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--data", default="dataset", help="folder for the dataset")
     parser.add_argument("--port", default=None, help="serial port, e.g. /dev/ttyUSB0 or COM5")
     parser.add_argument("--baud", type=int, default=DEFAULT_BAUDRATE, help="UART baud rate")
+    parser.add_argument(
+        "--config",
+        default=None,
+        metavar="PATH",
+        help="project config (default: ./emg_config.json when present)",
+    )
     return parser.parse_args()
 
 
@@ -39,10 +46,16 @@ def main() -> int:
     print("[1/3] Dataset folder:", dataset.resolve())
     print("[2/3] Serial port:", args.port or "(choose it in the window)")
     print("      Baud rate:", args.baud)
+    print("      Config:", args.config or "emg_config.json (if present)")
     print("[3/3] Opening the acquisition window...")
     print("      Hold Record, say one word, then release. Repeat for each class.")
 
-    return record(dataset, port=args.port, baudrate=args.baud)
+    return record(
+        dataset,
+        port=args.port,
+        baudrate=args.baud,
+        config_path=args.config,
+    )
 
 
 if __name__ == "__main__":

@@ -60,6 +60,35 @@ def test_take_preview_defaults_to_emg_only(tmp_path, qt_app) -> None:
         window.close()
 
 
+def test_acquisition_uses_project_config_for_a_new_dataset(tmp_path, qt_app) -> None:
+    from emg_speech.config import (
+        DatasetMeta,
+        DetectionConfig,
+        DspConfig,
+        ProjectConfig,
+    )
+    from emg_speech.ui.acquisition_window import AcquisitionWindow
+
+    config = ProjectConfig(
+        dsp=DspConfig(sample_rate=1000.0, seq_len=256),
+        detection=DetectionConfig(on_sigma=5.0),
+    )
+    dataset = tmp_path / "dataset"
+    window = AcquisitionWindow(dataset, project_config=config)
+    try:
+        assert window._fs.value() == 1000.0
+        assert window._seq_len.value() == 256
+        assert window._on_sigma.value() == 5.0
+
+        meta = DatasetMeta.load(dataset)
+        assert meta is not None
+        assert meta.sample_rate == 1000.0
+        assert meta.seq_len == 256
+        assert meta.detection_config.on_sigma == 5.0
+    finally:
+        window.close()
+
+
 def test_live_waveform_scrolls_with_a_fixed_window(qt_app) -> None:
     from emg_speech.ui.widgets import LiveWaveform
 
@@ -134,6 +163,39 @@ def test_inference_connect_button_starts_and_stops(monkeypatch, qt_app) -> None:
     window._port_selector._connect.click()
     assert stopped == [True]
     window.close()
+
+
+def test_inference_rejects_a_mismatched_project_config(
+    tmp_path, qt_app, capsys
+) -> None:
+    from emg_speech.config import (
+        DetectionConfig,
+        DspConfig,
+        ModelConfig,
+        ProjectConfig,
+    )
+    from emg_speech.model import EMGSequenceClassifier, save_checkpoint
+    from emg_speech.ui.app import run_inference
+
+    model = EMGSequenceClassifier(
+        9,
+        2,
+        ModelConfig(hidden_size=8, conv_channels=8, attention_dim=8),
+    )
+    checkpoint = save_checkpoint(
+        tmp_path / "model.pt",
+        model,
+        label_map=["alpha", "beta"],
+        dsp_config=DspConfig(),
+        detection_config=DetectionConfig(),
+        metrics={},
+    )
+    config_path = ProjectConfig(
+        dsp=DspConfig(sample_rate=1000.0, seq_len=256)
+    ).save(tmp_path / "emg_config.json")
+
+    assert run_inference(checkpoint=checkpoint, config_path=config_path) == 2
+    assert "Configuration error" in capsys.readouterr().err
 
 
 def test_port_selector_accepts_manual_port_names(qt_app) -> None:

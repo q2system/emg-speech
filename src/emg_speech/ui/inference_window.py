@@ -24,7 +24,12 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from emg_speech.config import DEFAULT_BAUDRATE, baudrate_warning
+from emg_speech.config import (
+    DEFAULT_BAUDRATE,
+    ProjectConfig,
+    baudrate_warning,
+    ensure_project_config_matches,
+)
 from emg_speech.inference import Prediction
 from emg_speech.model import CheckpointError, CheckpointSummary, read_checkpoint_summary
 from emg_speech.sources import ReplaySource, SerialSource
@@ -43,11 +48,13 @@ class InferenceWindow(QMainWindow):
         initial_port: str | None = None,
         baudrate: int = DEFAULT_BAUDRATE,
         min_confidence: float = 0.5,
+        project_config: ProjectConfig | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._checkpoint_path: Path | None = None
         self._summary: CheckpointSummary | None = None
+        self._project_config = project_config
         self._replay_root = Path(replay_root).expanduser().resolve() if replay_root else None
         self._initial_port = initial_port
         self._initial_baud = baudrate
@@ -275,6 +282,17 @@ class InferenceWindow(QMainWindow):
         except CheckpointError as exc:
             QMessageBox.critical(self, "Invalid checkpoint", str(exc))
             return
+        if self._project_config is not None:
+            try:
+                ensure_project_config_matches(
+                    self._project_config,
+                    sample_rate=summary.dsp_config.sample_rate,
+                    seq_len=summary.dsp_config.seq_len,
+                    artifact=f"checkpoint '{path}'",
+                )
+            except ValueError as exc:
+                QMessageBox.critical(self, "Configuration mismatch", str(exc))
+                return
         self._checkpoint_path = path
         self._summary = summary
         self._model_path.setText(str(path))

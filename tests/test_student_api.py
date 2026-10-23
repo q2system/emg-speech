@@ -21,7 +21,10 @@ def test_public_api_delegates_to_the_gui(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(gui, "run_inference", fake_inference)
 
     assert api.record(tmp_path, port="COM9", baudrate=123) == 7
-    assert calls[-1] == ((tmp_path,), {"port": "COM9", "baudrate": 123})
+    assert calls[-1] == (
+        (tmp_path,),
+        {"port": "COM9", "baudrate": 123, "config_path": None},
+    )
 
     assert api.recognize("model.pt", replay="dataset_demo") == 8
     assert calls[-1][1]["checkpoint"] == "model.pt"
@@ -61,3 +64,6 @@ def test_simulate_api_forwards_options(monkeypatch) -> None:
 
     assert api.simulate("--pty", "--interval", "1.5") == 3
     assert calls == [["--pty", "--interval", "1.5"]]
+
+    assert api.simulate("--pty", config_path="lab.json") == 3
+    assert calls[-1][-2:] == ["--config", "lab.json"]

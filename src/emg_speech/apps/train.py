@@ -9,7 +9,12 @@ import argparse
 import sys
 from pathlib import Path
 
-from emg_speech.config import ModelConfig, TrainConfig
+from emg_speech.config import (
+    ModelConfig,
+    TrainConfig,
+    load_project_config,
+)
+from emg_speech.jsonio import JsonIOError
 from emg_speech.model import CheckpointError
 from emg_speech.train import EpochMetrics, TrainingError, train
 
@@ -31,6 +36,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Train the EMG sequence classifier")
     parser.add_argument("--data", default="dataset", help="dataset folder from `python record.py`")
     parser.add_argument("--out", default="artifacts/model.pt", help="output checkpoint")
+    parser.add_argument(
+        "--config",
+        default=None,
+        metavar="PATH",
+        help="project config (default: ./emg_config.json when present)",
+    )
     parser.add_argument("--epochs", type=int, default=40)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--lr", type=float, default=1e-3)
@@ -65,6 +76,14 @@ def main(argv: list[str] | None = None) -> int:
         "--augment", action="store_true", help="time-shift/gain/noise augmentation"
     )
     args = parser.parse_args(argv)
+
+    try:
+        project_config = load_project_config(
+            args.config, required=args.config is not None
+        )
+    except (ValueError, OSError, JsonIOError) as exc:
+        print(f"Configuration error: {exc}", file=sys.stderr)
+        return 2
 
     train_config = TrainConfig(
         epochs=args.epochs,
@@ -118,6 +137,7 @@ def main(argv: list[str] | None = None) -> int:
             train_config=train_config,
             model_config=model_config,
             on_epoch=on_epoch,
+            project_config=project_config,
         )
     except (TrainingError, ValueError, CheckpointError) as exc:
         print(f"\nTraining failed: {exc}", file=sys.stderr)

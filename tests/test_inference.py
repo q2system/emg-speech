@@ -5,7 +5,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from emg_speech.config import DetectionConfig, DspConfig, ModelConfig, TrainConfig
+from emg_speech.config import (
+    DetectionConfig,
+    DspConfig,
+    ModelConfig,
+    ProjectConfig,
+    TrainConfig,
+)
 from emg_speech.dataset import DatasetIndex
 from emg_speech.inference import RecognizerState, StreamingRecognizer
 from emg_speech.model import EMGSequenceClassifier, load_checkpoint, save_checkpoint
@@ -58,6 +64,21 @@ def test_single_class_dataset_is_rejected(tmp_path: Path) -> None:
             tmp_path / "model.pt",
             train_config=TrainConfig(epochs=1, device="cpu"),
             model_config=ModelConfig(hidden_size=8, conv_channels=8, attention_dim=8),
+        )
+
+
+def test_training_rejects_project_config_mismatch(
+    demo_dataset: Path, tmp_path: Path
+) -> None:
+    with pytest.raises(ValueError, match="Project config uses"):
+        train(
+            demo_dataset,
+            tmp_path / "model.pt",
+            train_config=TrainConfig(epochs=1, device="cpu"),
+            model_config=ModelConfig(hidden_size=8, conv_channels=8, attention_dim=8),
+            project_config=ProjectConfig(
+                dsp=DspConfig(sample_rate=1000.0, seq_len=256)
+            ),
         )
 
 

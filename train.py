@@ -9,6 +9,7 @@ Steps:
 Run:
     python train.py
     python train.py --data dataset --out artifacts/model.pt --epochs 40
+    python train.py --config emg_config.json
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from _bootstrap import add_src_to_path
 add_src_to_path()
 
 from emg_speech import train_model
+from emg_speech.jsonio import JsonIOError
 
 
 def parse_args() -> argparse.Namespace:
@@ -30,6 +32,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out", default="artifacts/model.pt", help="output checkpoint")
     parser.add_argument("--epochs", type=int, default=40, help="maximum training epochs")
     parser.add_argument("--device", default="auto", help="auto | cpu | cuda | xpu | mps")
+    parser.add_argument(
+        "--config",
+        default=None,
+        metavar="PATH",
+        help="project config (default: ./emg_config.json when present)",
+    )
     return parser.parse_args()
 
 
@@ -39,6 +47,7 @@ def main() -> int:
     checkpoint = Path(args.out)
 
     print("[1/4] Dataset:", dataset.resolve())
+    print("      Config:", args.config or "emg_config.json (if present)")
     if not dataset.exists():
         print(f"Dataset folder '{dataset}' does not exist.", file=sys.stderr)
         print("Record examples first with: python record.py", file=sys.stderr)
@@ -57,8 +66,9 @@ def main() -> int:
             checkpoint,
             epochs=args.epochs,
             device=args.device,
+            config_path=args.config,
         )
-    except (TrainingError, CheckpointError, ValueError) as exc:
+    except (TrainingError, CheckpointError, ValueError, OSError, JsonIOError) as exc:
         print(f"\nTraining failed: {exc}", file=sys.stderr)
         return 1
 

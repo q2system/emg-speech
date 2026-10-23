@@ -9,6 +9,7 @@ Run:
     python simulate.py --pty
     python simulate.py --pty --mode manual --words hello,world
     python simulate.py --port COM5 --baud 921600
+    python simulate.py --pty --config emg_config.json
 """
 
 from __future__ import annotations

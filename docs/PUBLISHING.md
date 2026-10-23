@@ -18,6 +18,7 @@ The package follows the `src/` layout recommended by the
 ├── MANIFEST.in
 ├── README.md
 ├── pyproject.toml
+├── configure.py
 ├── record.py
 ├── train.py
 ├── recognize.py
@@ -48,6 +49,7 @@ pip install "git+https://github.com/<your-user>/<your-repo>.git"
 After installation, the commands are available from anywhere:
 
 ```bash
+emg-config --help
 emg-record --help
 emg-train --help
 emg-recognize --help
@@ -79,6 +81,7 @@ Test the wheel in a clean environment before uploading:
 python -m venv /tmp/emg-test
 source /tmp/emg-test/bin/activate
 pip install dist/emg_speech-1.0.0-py3-none-any.whl
+emg-config --help
 emg-record --help
 emg-simulate --help
 ```

@@ -8,6 +8,7 @@ engine share exactly the same signal-processing contract.
 from __future__ import annotations
 
 import dataclasses
+import math
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,6 +33,23 @@ DEFAULT_BAUDRATE: int = 921600
 DEFAULT_SAMPLE_RATE: float = 500.0
 #: Number of time steps every sample is resampled to.
 DEFAULT_SEQ_LEN: int = 128
+
+#: Project-wide config file created by ``emg-config`` / ``configure.py``.
+PROJECT_CONFIG_FILENAME: str = "emg_config.json"
+#: Bumped whenever the on-disk project config schema changes.
+PROJECT_CONFIG_VERSION: int = 1
+#: Supported acquisition ranges.  The project config is validated against
+#: these so a value written by ``emg-config`` can always be shown in the GUI.
+MIN_SAMPLE_RATE: float = 250.0
+MAX_SAMPLE_RATE: float = 2000.0
+MIN_SEQ_LEN: int = 32
+MAX_SEQ_LEN: int = 1024
+#: Ranges exposed by the acquisition GUI.  Project config values are kept
+#: inside them so what is written is exactly what the GUI can display.
+DETECTION_ON_SIGMA_RANGE: tuple[float, float] = (1.5, 12.0)
+DETECTION_MIN_EVENT_MS_RANGE: tuple[float, float] = (50.0, 1500.0)
+DETECTION_MAX_EVENT_MS_RANGE: tuple[float, float] = (200.0, 4000.0)
+DETECTION_POST_MARGIN_MS_RANGE: tuple[float, float] = (0.0, 500.0)
 
 #: Conservative size of one keyed ASCII frame (90 characters + CR/LF).
 FRAME_BYTES: int = 110
@@ -200,6 +218,165 @@ class DetectionConfig:
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "DetectionConfig":
         return cls(**_known_kwargs(cls, data))
+
+
+@dataclass(frozen=True)
+class ProjectConfig:
+    """Project-wide defaults stored in ``emg_config.json``.
+
+    The file is optional: when it is absent, commands keep their historical
+    defaults.  Existing datasets and checkpoints remain authoritative for the
+    data they contain; commands compare them against this configuration and
+    report a clear mismatch instead of silently replacing recorded settings.
+    """
+
+    dsp: DspConfig = field(default_factory=DspConfig)
+    detection: DetectionConfig = field(default_factory=DetectionConfig)
+
+    def __post_init__(self) -> None:
+        if not MIN_SAMPLE_RATE <= self.dsp.sample_rate <= MAX_SAMPLE_RATE:
+            raise ValueError(
+                f"sample_rate must be between {MIN_SAMPLE_RATE:g} and "
+                f"{MAX_SAMPLE_RATE:g} Hz"
+            )
+        if not MIN_SEQ_LEN <= self.dsp.seq_len <= MAX_SEQ_LEN:
+            raise ValueError(
+                f"seq_len must be between {MIN_SEQ_LEN} and {MAX_SEQ_LEN}"
+            )
+
+        detection = self.detection
+        for name, value, bounds in (
+            ("on_sigma", detection.on_sigma, DETECTION_ON_SIGMA_RANGE),
+            (
+                "min_event_ms",
+                detection.min_event_ms,
+                DETECTION_MIN_EVENT_MS_RANGE,
+            ),
+            (
+                "max_event_ms",
+                detection.max_event_ms,
+                DETECTION_MAX_EVENT_MS_RANGE,
+            ),
+            (
+                "post_margin_ms",
+                detection.post_margin_ms,
+                DETECTION_POST_MARGIN_MS_RANGE,
+            ),
+        ):
+            low, high = bounds
+            if not low <= value <= high:
+                raise ValueError(
+                    f"{name} must be between {low:g} and {high:g}"
+                )
+
+    @property
+    def sample_rate(self) -> float:
+        return self.dsp.sample_rate
+
+    @property
+    def seq_len(self) -> int:
+        return self.dsp.seq_len
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "format_version": PROJECT_CONFIG_VERSION,
+            "dsp": self.dsp.to_dict(),
+            "detection": self.detection.to_dict(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "ProjectConfig":
+        if not isinstance(data, Mapping):
+            raise ValueError("project config must be a JSON object")
+
+        version_value = data.get("format_version", PROJECT_CONFIG_VERSION)
+        try:
+            version = int(version_value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"project config format_version must be an integer, got {version_value!r}"
+            ) from exc
+        if version > PROJECT_CONFIG_VERSION:
+            raise ValueError(
+                f"Project config format v{version} is newer than this "
+                f"application (v{PROJECT_CONFIG_VERSION}). Please update."
+            )
+
+        dsp_payload = data.get("dsp")
+        if dsp_payload is None:
+            # Accept a small hand-written file with the two most common keys at
+            # the top level, while the command always writes the nested form.
+            dsp_payload = {
+                key: data[key]
+                for key in ("sample_rate", "seq_len")
+                if key in data
+            }
+        if not isinstance(dsp_payload, Mapping):
+            raise ValueError("project config 'dsp' must be a JSON object")
+
+        detection_payload = data.get("detection", {})
+        if not isinstance(detection_payload, Mapping):
+            raise ValueError("project config 'detection' must be a JSON object")
+
+        return cls(
+            dsp=DspConfig.from_dict(dsp_payload),
+            detection=DetectionConfig.from_dict(detection_payload),
+        )
+
+    @classmethod
+    def load(cls, path: str | Path | None = None) -> "ProjectConfig":
+        source = resolve_project_config_path(path)
+        return cls.from_dict(read_json(source))
+
+    def save(self, path: str | Path | None = None) -> Path:
+        target = resolve_project_config_path(path)
+        write_json(target, self.to_dict())
+        return target
+
+
+def resolve_project_config_path(path: str | Path | None = None) -> Path:
+    """Return the explicit config path, or ``./emg_config.json`` by default."""
+
+    if path is None:
+        return Path.cwd() / PROJECT_CONFIG_FILENAME
+    return Path(path).expanduser()
+
+
+def load_project_config(
+    path: str | Path | None = None,
+    *,
+    required: bool = False,
+) -> ProjectConfig | None:
+    """Load the project config, or return ``None`` when it does not exist."""
+
+    source = resolve_project_config_path(path)
+    if not source.exists():
+        if required:
+            raise FileNotFoundError(f"Project config '{source}' not found")
+        return None
+    return ProjectConfig.load(source)
+
+
+def ensure_project_config_matches(
+    project: ProjectConfig,
+    *,
+    sample_rate: float,
+    seq_len: int,
+    artifact: str,
+) -> None:
+    """Raise a clear error when an artifact disagrees with the project config."""
+
+    same_rate = math.isclose(
+        project.sample_rate, float(sample_rate), rel_tol=1e-9, abs_tol=1e-9
+    )
+    if same_rate and project.seq_len == int(seq_len):
+        return
+    raise ValueError(
+        f"Project config uses {project.sample_rate:g} Hz and "
+        f"{project.seq_len} time steps, but {artifact} uses "
+        f"{sample_rate:g} Hz and {seq_len} time steps. Use a matching "
+        "config (`emg-config --config PATH`) or keep the artifact's values."
+    )
 
 
 @dataclass

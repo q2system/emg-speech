@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "emg-speech"
 # TODO: bump this before every PyPI upload. PyPI rejects duplicate versions.
-version = "1.0.0"
+version = "2.0.0"
 description = "Subvocal EMG speech recognition: acquisition, training and real-time inference"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -36,6 +36,7 @@ dependencies = [
 dev = ["pytest>=8", "build>=1.0", "twine>=5.0"]
 
 [project.scripts]
+emg-config = "emg_speech.apps.configure:main"
 emg-record = "emg_speech.apps.acquire:main"
 emg-acquire = "emg_speech.apps.acquire:main"
 emg-train = "emg_speech.apps.train:main"

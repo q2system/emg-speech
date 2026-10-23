@@ -17,6 +17,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--data", default="dataset", help="dataset folder (created if missing)")
     parser.add_argument("--port", default=None, help="serial port, e.g. /dev/ttyUSB0 or COM5")
     parser.add_argument("--baud", type=int, default=DEFAULT_BAUDRATE, help="UART baud rate")
+    parser.add_argument(
+        "--config",
+        default=None,
+        metavar="PATH",
+        help="project config (default: ./emg_config.json when present)",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -25,7 +31,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Could not start the GUI: {exc}", file=sys.stderr)
         print("Install the desktop dependencies with: pip install -r requirements.txt", file=sys.stderr)
         return 1
-    return run_acquisition(args.data, port=args.port, baudrate=args.baud)
+    return run_acquisition(
+        args.data,
+        port=args.port,
+        baudrate=args.baud,
+        config_path=args.config,
+    )
 
 
 if __name__ == "__main__":

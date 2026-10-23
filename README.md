@@ -7,6 +7,7 @@ built so that the part students need to read is intentionally tiny:
 
 | Action | Command | What it shows |
 |--------|---------|---------------|
+| Set the signal shape | `python configure.py` | Writes `emg_config.json` |
 | Record examples | `python record.py` | One word per button hold |
 | Train a model | `python train.py` | Dataset → checkpoint |
 | Recognise live | `python recognize.py` | Checkpoint → text |
@@ -15,6 +16,7 @@ built so that the part students need to read is intentionally tiny:
 The only student-facing programs are:
 
 ```
+configure.py             write the project-wide signal configuration
 record.py                record labelled examples (with printed steps)
 train.py                 train a classifier (with printed steps)
 recognize.py             run live recognition (with printed steps)
@@ -31,11 +33,11 @@ needs the details.
 The public API is just:
 
 ```python
-from emg_speech import record, train_model, recognize, simulate
+from emg_speech import ProjectConfig, record, train_model, recognize, simulate
 ```
 
 These imports work after `pip install -e .` (or any normal installation).  The
-four scripts also run directly from a checkout without installing the package.
+entry scripts also run directly from a checkout without installing the package.
 
 > **Students can stop after this section.**  The rest of this README is a
 > developer reference; `docs/STUDENT_GUIDE.md` explains the pipeline without
@@ -173,6 +175,11 @@ Settings (`sample rate`, `seq_len`) are written to `dataset/dataset.json` and
 locked as soon as one sample exists. Emptying the dataset (delete class /
 delete last take) unlocks them again; adding samples at a different rate or
 length is refused instead of silently mixing shapes.
+
+For a new project, create the same signal shape once with `emg-config` (or
+`python configure.py`) and all commands use it as their default. Existing
+`dataset.json` and checkpoint files remain authoritative, so an old dataset or
+model can never be silently changed by editing the project config.
 
 ### DSP chain (identical offline and live)
 
@@ -326,7 +333,7 @@ python -m venv .venv && source .venv/bin/activate
 # Recommended: install this project in editable mode.
 python -m pip install -e ".[dev]"
 
-# Or install only the runtime dependencies.  The four scripts still run from
+# Or install only the runtime dependencies.  The entry scripts still run from
 # a checkout because _bootstrap.py adds src/ to sys.path, but the installed
 # console commands and `python -m emg_speech...` need the editable install.
 # pip install -r requirements.txt
@@ -351,9 +358,10 @@ Or, after publishing to PyPI:
 pip install emg-speech
 ```
 
-This installs the library and four console commands:
+This installs the library and these console commands:
 
 ```bash
+emg-config --help
 emg-record --help
 emg-train --help
 emg-recognize --help
@@ -363,6 +371,44 @@ emg-simulate --help
 `docs/PUBLISHING.md` contains the full build, TestPyPI, PyPI and API-token
 instructions.  Datasets and `artifacts/` are **not** packaged; create them on
 the target machine using `emg-record` / `emg-train`.
+
+### Project-wide configuration
+
+Create `emg_config.json` once in the project folder.  The installed command and
+the direct script do exactly the same thing:
+
+```bash
+emg-config --sample-rate 1000 --seq-len 256
+# or, from a checkout:
+python configure.py --sample-rate 1000 --seq-len 256
+```
+
+The file records the signal shape and detector settings:
+
+```json
+{
+  "format_version": 1,
+  "dsp": {"sample_rate": 1000.0, "seq_len": 256, "...": "..."},
+  "detection": {"on_sigma": 4.0, "...": "..."}
+}
+```
+
+Use `emg-config` with no options to show the current values, `--config PATH` to
+keep several settings files, and `--reset` to restore the defaults.  The
+recording window, `simulate.py`, training and inference all read the file
+automatically; each command also accepts `--config PATH`.
+
+Precedence is intentional:
+
+- A **new** dataset uses the project config for its initial sample rate,
+  sequence length and detector settings.
+- Once `dataset/dataset.json` exists with samples, that file is authoritative.
+  Training reports a clear error if the project config disagrees.
+- A **checkpoint** stores the DSP settings it was trained with.  Inference
+  reports a clear error if the project config disagrees, instead of running a
+  model on the wrong signal shape.
+- The simulator uses the project sample rate unless `--rate` is given
+  explicitly.
 
 ### No-hardware demo
 
@@ -380,13 +426,15 @@ python recognize.py --checkpoint artifacts/model.pt --replay dataset_demo
 ### With hardware
 
 ```bash
+python configure.py --sample-rate 500 --seq-len 128
 python record.py --data dataset --port /dev/ttyUSB0 --baud 921600
 python train.py   --data dataset --out artifacts/model.pt --epochs 60
 python recognize.py   --checkpoint artifacts/model.pt --port /dev/ttyUSB0 --baud 921600
 ```
 
 Use `--port COM5` on Windows. The firmware must sample and transmit at the same
-rate configured in the UI (default 500 Hz) and use the same baud rate.
+rate stored in `emg_config.json` (or the dataset/checkpoint for existing work)
+and use the same baud rate.
 
 #### Windows COM ports
 

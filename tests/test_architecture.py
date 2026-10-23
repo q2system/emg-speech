@@ -8,13 +8,19 @@ UI = CORE / "ui"
 
 
 def test_library_owns_the_implementation() -> None:
-    """Students should see one src/ library and four direct entry scripts."""
+    """Students should see one src/ library and direct entry scripts."""
 
     assert CORE.is_dir()
     assert not (ROOT / "emg_speech").exists()
     assert not (ROOT / "ui").exists()
     assert not (ROOT / "apps").exists()
-    for name in ("record.py", "train.py", "recognize.py", "simulate.py"):
+    for name in (
+        "configure.py",
+        "record.py",
+        "train.py",
+        "recognize.py",
+        "simulate.py",
+    ):
         script = ROOT / name
         assert script.exists()
         assert len(script.read_text(encoding="utf-8").splitlines()) < 95

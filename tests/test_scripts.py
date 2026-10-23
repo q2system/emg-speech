@@ -10,6 +10,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 SCRIPTS = {
+    "configure.py": "project-wide EMG signal configuration",
     "record.py": "Record labelled EMG examples",
     "train.py": "Train the EMG word classifier",
     "recognize.py": "Recognise words from EMG",

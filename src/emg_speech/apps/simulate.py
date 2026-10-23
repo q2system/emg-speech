@@ -33,14 +33,18 @@ import argparse
 import sys
 import threading
 import time
+from dataclasses import replace
 from pathlib import Path
 
 from emg_speech.config import (
     DEFAULT_BAUDRATE,
+    DEFAULT_SAMPLE_RATE,
     DetectionConfig,
     DspConfig,
+    load_project_config,
 )
 from emg_speech.dsp import EventNotFound, extract_sample
+from emg_speech.jsonio import JsonIOError
 from emg_speech.simulator import DEFAULT_WORDS, SimulatedSource, encode_line
 from emg_speech.sources import (
     FrameSource,
@@ -193,8 +197,19 @@ def _dry_run(args: argparse.Namespace) -> int:
     print("  " + encode_line(frames[0]))
 
     if cues:
-        dsp = DspConfig(sample_rate=args.rate)
-        detection = DetectionConfig()
+        project = getattr(args, "project_config", None)
+        try:
+            dsp = (
+                replace(project.dsp, sample_rate=args.rate)
+                if project is not None
+                else DspConfig(sample_rate=args.rate)
+            )
+            detection = (
+                project.detection if project is not None else DetectionConfig()
+            )
+        except ValueError as exc:
+            print(f"Invalid configuration: {exc}", file=sys.stderr)
+            return 2
         cue = cues[0]
         start = max(0, cue.frame - int(0.35 * args.rate))
         end = min(len(frames), cue.frame + int(1.0 * args.rate))
@@ -230,6 +245,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pty", action="store_true", help="create a virtual PTY pair (Linux/macOS)")
     parser.add_argument("--list-ports", action="store_true", help="list detected serial ports")
     parser.add_argument("--setup-windows", action="store_true", help="show com0com instructions")
+    parser.add_argument(
+        "--config",
+        default=None,
+        metavar="PATH",
+        help="project config (default: ./emg_config.json when present)",
+    )
     parser.add_argument("--replay", metavar="DATASET", default=None, help="loop a recorded dataset instead")
     parser.add_argument(
         "--words",
@@ -242,7 +263,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--start-idle", type=float, default=2.0, help="idle seconds before the first gesture")
     parser.add_argument("--noise", type=float, default=0.02, help="idle EMG standard deviation")
     parser.add_argument("--amplitude", type=float, default=1.1, help="gesture EMG amplitude")
-    parser.add_argument("--rate", type=float, default=500.0, help="frames per second")
+    parser.add_argument(
+        "--rate",
+        type=float,
+        default=None,
+        help="frames per second (default: project config or 500)",
+    )
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--duration", type=float, default=0.0, help="stop after N seconds (0 = forever)")
     parser.add_argument("--dry-run", action="store_true", help="generate without opening a port")
@@ -253,6 +279,20 @@ def main(argv: list[str] | None = None) -> int:
     if args.setup_windows:
         print(WINDOWS_HELP)
         return 0
+
+    try:
+        project = load_project_config(
+            args.config, required=args.config is not None
+        )
+    except (ValueError, OSError, JsonIOError) as exc:
+        print(f"[sim] configuration error: {exc}", file=sys.stderr)
+        return 2
+    args.project_config = project
+    if args.rate is None:
+        args.rate = (
+            project.sample_rate if project is not None else DEFAULT_SAMPLE_RATE
+        )
+
     if args.rate <= 0 or args.interval <= 0:
         print("--rate and --interval must be positive", file=sys.stderr)
         return 2

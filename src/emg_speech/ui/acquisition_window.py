@@ -33,10 +33,20 @@ from PyQt6.QtWidgets import (
 
 from emg_speech.config import (
     DEFAULT_BAUDRATE,
+    DETECTION_MAX_EVENT_MS_RANGE,
+    DETECTION_MIN_EVENT_MS_RANGE,
+    DETECTION_ON_SIGMA_RANGE,
+    DETECTION_POST_MARGIN_MS_RANGE,
+    MAX_SAMPLE_RATE,
+    MAX_SEQ_LEN,
+    MIN_SAMPLE_RATE,
+    MIN_SEQ_LEN,
     DatasetMeta,
     DetectionConfig,
     DspConfig,
+    ProjectConfig,
     baudrate_warning,
+    ensure_project_config_matches,
 )
 from emg_speech.constants import CHANNELS
 from emg_speech.dsp import NoiseProfile, StreamingPipeline
@@ -69,16 +79,21 @@ class AcquisitionWindow(QMainWindow):
         *,
         initial_port: str | None = None,
         baudrate: int = DEFAULT_BAUDRATE,
+        project_config: ProjectConfig | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._dataset_root = ensure_dataset_root(dataset_root)
         self._initial_port = initial_port
         self._initial_baud = baudrate
+        self._project_config = project_config
 
         self._meta: DatasetMeta | None = None
-        self._base_dsp = DspConfig()
-        self._base_detection = DetectionConfig()
+        self._base_dsp = project_config.dsp if project_config else DspConfig()
+        self._base_detection = (
+            project_config.detection if project_config else DetectionConfig()
+        )
+        self._config_warning: str | None = None
         self._profile: NoiseProfile | None = None
         self._settings_locked = False
         self._loading = True
@@ -256,16 +271,16 @@ class AcquisitionWindow(QMainWindow):
         settings = QGroupBox("Signal shape")
         form = QFormLayout(settings)
         self._fs = QDoubleSpinBox()
-        self._fs.setRange(250.0, 2000.0)
+        self._fs.setRange(MIN_SAMPLE_RATE, MAX_SAMPLE_RATE)
         self._fs.setSingleStep(50.0)
         self._fs.setDecimals(0)
         self._fs.setSuffix(" Hz")
-        self._fs.setValue(500.0)
+        self._fs.setValue(self._base_dsp.sample_rate)
         self._fs.setToolTip("Must match the firmware sampling/transmission rate")
         self._seq_len = QSpinBox()
-        self._seq_len.setRange(32, 1024)
+        self._seq_len.setRange(MIN_SEQ_LEN, MAX_SEQ_LEN)
         self._seq_len.setSingleStep(16)
-        self._seq_len.setValue(128)
+        self._seq_len.setValue(self._base_dsp.seq_len)
         self._seq_len.setToolTip("Every take is resampled to exactly this many time steps")
         form.addRow("Sample rate", self._fs)
         form.addRow("Sequence length", self._seq_len)
@@ -274,24 +289,24 @@ class AcquisitionWindow(QMainWindow):
         detection = QGroupBox("Event detection")
         det_form = QFormLayout(detection)
         self._on_sigma = QDoubleSpinBox()
-        self._on_sigma.setRange(1.5, 12.0)
+        self._on_sigma.setRange(*DETECTION_ON_SIGMA_RANGE)
         self._on_sigma.setSingleStep(0.5)
         self._on_sigma.setValue(4.0)
         self._on_sigma.setToolTip(
             "Onset threshold = noise floor + N × noise standard deviation"
         )
         self._min_event = QDoubleSpinBox()
-        self._min_event.setRange(50.0, 1500.0)
+        self._min_event.setRange(*DETECTION_MIN_EVENT_MS_RANGE)
         self._min_event.setSingleStep(25.0)
         self._min_event.setSuffix(" ms")
         self._min_event.setValue(150.0)
         self._max_event = QDoubleSpinBox()
-        self._max_event.setRange(200.0, 4000.0)
+        self._max_event.setRange(*DETECTION_MAX_EVENT_MS_RANGE)
         self._max_event.setSingleStep(100.0)
         self._max_event.setSuffix(" ms")
         self._max_event.setValue(1600.0)
         self._post_margin = QDoubleSpinBox()
-        self._post_margin.setRange(0.0, 500.0)
+        self._post_margin.setRange(*DETECTION_POST_MARGIN_MS_RANGE)
         self._post_margin.setSingleStep(20.0)
         self._post_margin.setSuffix(" ms")
         self._post_margin.setValue(100.0)
@@ -365,6 +380,29 @@ class AcquisitionWindow(QMainWindow):
             self._meta = meta
             self._base_dsp = meta.dsp_config
             self._base_detection = meta.detection_config
+
+        if not has_samples and self._project_config is not None:
+            # No takes exist yet, so the project config may define the new
+            # dataset contract.  Persist it now so dataset.json is consistent
+            # even before the first recording.
+            self._base_dsp = self._project_config.dsp
+            self._base_detection = self._project_config.detection
+            self._meta = DatasetMeta.from_configs(
+                self._base_dsp, self._base_detection
+            )
+            self._meta.save(self._dataset_root)
+        elif has_samples and self._project_config is not None:
+            # Once samples exist their metadata is authoritative.  Explain the
+            # conflict rather than silently changing the signal shape.
+            try:
+                ensure_project_config_matches(
+                    self._project_config,
+                    sample_rate=self._base_dsp.sample_rate,
+                    seq_len=self._base_dsp.seq_len,
+                    artifact=f"dataset '{self._dataset_root}'",
+                )
+            except ValueError as exc:
+                self._config_warning = str(exc)
 
         blockers = [
             QSignalBlocker(self._fs),
@@ -468,7 +506,11 @@ class AcquisitionWindow(QMainWindow):
         self._last_level = 0.0
         self._waveform.clear()
         self._preview.clear()
-        self._warning_info.hide()
+        if self._config_warning:
+            self._warning_info.setText(self._config_warning)
+            self._warning_info.show()
+        else:
+            self._warning_info.hide()
         self._set_state("Offline" if not self._streaming else "Ready", MUTED)
 
     # -------------------------------------------------------------- classes
