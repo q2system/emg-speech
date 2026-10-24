@@ -4,6 +4,9 @@ scipy>=1.10
 pyserial>=3.5
 torch>=2.1
 
+# Plots in the student walkthrough
+matplotlib>=3.7
+
 # Desktop UI
 PyQt6>=6.5
 

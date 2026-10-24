@@ -25,7 +25,7 @@ def _print_confusion(report) -> None:
         return
     width = max(8, *(len(label) + 1 for label in labels))
     header = " " * (width + 2) + " ".join(f"{label[:width]:>{width}}" for label in labels)
-    print("\nConfusion matrix (rows = true, columns = predicted)")
+    print("\nValidation confusion matrix (rows = true, columns = predicted)")
     print(header)
     for label, row in zip(labels, report.confusion):
         values = " ".join(f"{int(value):>{width}}" for value in row)

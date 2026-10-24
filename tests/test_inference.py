@@ -16,7 +16,26 @@ from emg_speech.dataset import DatasetIndex
 from emg_speech.inference import RecognizerState, StreamingRecognizer
 from emg_speech.model import EMGSequenceClassifier, load_checkpoint, save_checkpoint
 from emg_speech.synthetic import _make_take
-from emg_speech.train import TrainingError, train
+from emg_speech.train import (
+    TrainingError,
+    classification_metrics,
+    load_training_history,
+    train,
+)
+
+
+def test_classification_metrics_are_macro_averaged() -> None:
+    targets = np.array([0, 0, 1, 1], dtype=np.int64)
+    predictions = np.array([0, 1, 1, 1], dtype=np.int64)
+
+    metrics = classification_metrics(targets, predictions, 2)
+
+    assert metrics.accuracy == pytest.approx(0.75)
+    assert metrics.error == pytest.approx(0.25)
+    assert metrics.sensitivity == pytest.approx(0.75)
+    assert metrics.specificity == pytest.approx(0.75)
+    assert metrics.precision == pytest.approx(5 / 6)
+    assert metrics.f1 == pytest.approx((2 / 3 + 0.8) / 2)
 
 
 def test_training_produces_a_deployable_checkpoint(demo_dataset: Path, tmp_path: Path) -> None:
@@ -41,11 +60,42 @@ def test_training_produces_a_deployable_checkpoint(demo_dataset: Path, tmp_path:
     assert int(report.confusion.sum()) == 8
     assert 0.0 <= report.best_val_accuracy <= 1.0
     assert 0.0 <= report.best_val_macro_f1 <= 1.0
+    assert report.train_metrics.error == pytest.approx(
+        1.0 - report.train_metrics.accuracy
+    )
+    assert report.val_metrics.error == pytest.approx(
+        1.0 - report.val_metrics.accuracy
+    )
+    for metrics in (report.train_metrics, report.val_metrics):
+        assert 0.0 <= metrics.sensitivity <= 1.0
+        assert 0.0 <= metrics.specificity <= 1.0
+        assert 0.0 <= metrics.precision <= 1.0
+        assert 0.0 <= metrics.f1 <= 1.0
+    assert "Sensitivity" in report.summary()
+    assert "Specificity" in report.summary()
+    assert "Precision" in report.summary()
     assert set(report.label_map) == set(DatasetIndex.build(demo_dataset).label_map)
+
+    epoch = report.history[0]
+    assert epoch.train_error == pytest.approx(1.0 - epoch.train_accuracy)
+    assert epoch.val_error == pytest.approx(1.0 - epoch.val_accuracy)
+    history = load_training_history(checkpoint)
+    assert "train_sensitivity" in history["history"][0]
+    assert "val_specificity" in history["history"][0]
+    assert "val_precision" in history["history"][0]
 
     info = load_checkpoint(checkpoint, device="cpu")
     assert info.label_map == report.label_map
     assert info.metrics["val_accuracy"] == pytest.approx(report.best_val_accuracy)
+    assert info.metrics["val_sensitivity"] == pytest.approx(
+        report.val_metrics.sensitivity
+    )
+    assert info.metrics["val_specificity"] == pytest.approx(
+        report.val_metrics.specificity
+    )
+    assert info.metrics["val_precision"] == pytest.approx(
+        report.val_metrics.precision
+    )
 
 
 def test_single_class_dataset_is_rejected(tmp_path: Path) -> None:

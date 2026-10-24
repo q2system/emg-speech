@@ -4,7 +4,7 @@ The project is already a normal Python package:
 
 - distribution name: **`emg-speech`**
 - import name: **`emg_speech`**
-- version: **`1.0.0`**
+- version: **`2.0.0`**
 - Python: **3.10+**
 
 ## Project layout
@@ -80,7 +80,7 @@ Test the wheel in a clean environment before uploading:
 ```bash
 python -m venv /tmp/emg-test
 source /tmp/emg-test/bin/activate
-pip install dist/emg_speech-1.0.0-py3-none-any.whl
+pip install dist/emg_speech-2.0.0-py3-none-any.whl
 emg-config --help
 emg-record --help
 emg-simulate --help

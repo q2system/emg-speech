@@ -13,7 +13,7 @@ from __future__ import annotations
 from .api import record, recognize, simulate, train_model
 from .config import ProjectConfig
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 
 __all__ = [
     "ProjectConfig",

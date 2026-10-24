@@ -8,6 +8,8 @@ include train.py
 include recognize.py
 include simulate.py
 include inspect_take.py
+include pipeline_walkthrough.py
+recursive-include helper_lib *.py
 recursive-include docs *.md
 recursive-include tests *.py
 global-exclude *.py[cod]

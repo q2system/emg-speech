@@ -58,6 +58,18 @@ trains the neural network, and writes one checkpoint file.  The checkpoint
 contains the model weights, the label names, and the DSP settings needed by
 recognition.
 
+When training finishes, `report.summary()` shows these scores for both the
+training and validation sets:
+
+- accuracy and error rate
+- sensitivity (recall)
+- specificity
+- precision
+- F1 score
+
+Sensitivity, specificity, precision and F1 are averaged across the word classes,
+so the same table works whether you have two words or ten.
+
 ### 3. Recognise
 
 ```python
@@ -69,7 +81,25 @@ recognize("artifacts/model.pt")
 This opens the live window.  The library reads the serial stream, detects a
 burst, classifies it, and adds the predicted word to the transcript.
 
-## Run the five scripts directly
+## See every step with plots
+
+`pipeline_walkthrough.py` is a single classroom file that starts from the
+examples already saved in `dataset/`.  It walks through preprocessing,
+normalisation, batches, the model architecture, a forward pass, loss, the
+training loop, and the final confusion matrix.  Every section opens one figure
+and prints a short explanation.
+
+```bash
+python pipeline_walkthrough.py --data dataset_demo --epochs 3
+```
+
+Use `--save-dir plots` to write eight PNG files instead of opening windows.
+The main file is deliberately short and only calls one helper per section.  All
+Matplotlib setup and the longer functions are in `helper_lib/`, which keeps the
+pipeline easy to follow.  The walkthrough trains a small model for teaching;
+`train.py` is still the command that produces the real checkpoint.
+
+## Run the scripts directly
 
 ```bash
 python configure.py --sample-rate 500 --seq-len 128  # 0. set the signal shape
@@ -77,6 +107,7 @@ python record.py       # 1. record labelled examples
 python train.py        # 2. train a model
 python recognize.py    # 3. recognise words live
 python simulate.py --pty  # optional: fake ESP32 stream
+python pipeline_walkthrough.py --data dataset_demo  # plotted tour
 ```
 
 `configure.py` writes `emg_config.json` in the current folder.  The other
@@ -108,6 +139,8 @@ Only these top-level files are meant to be read by students:
 | `recognize.py` | Open the live recognition window. |
 | `simulate.py` | Create a fake ESP32 stream. |
 | `inspect_take.py` | Print one saved example. |
+| `pipeline_walkthrough.py` | Plot the whole pipeline from saved data to training results. |
+| `helper_lib/` | Plot setup and the longer helper functions used by the walkthrough. |
 | `docs/STUDENT_GUIDE.md` | This explanation. |
 
 Everything else is the library.  It uses the standard `src/` layout, so the

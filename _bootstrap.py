@@ -1,8 +1,8 @@
 """Add the ``src/`` directory to ``sys.path`` for source-checkout scripts.
 
 The package follows the standard ``src/`` layout.  After an editable or normal
-install this helper is unnecessary, but it lets the four demonstration scripts
-run directly from a freshly cloned repository without setting ``PYTHONPATH``.
+install this helper is unnecessary, but it lets the entry scripts run directly
+from a freshly cloned repository without setting ``PYTHONPATH``.
 """
 
 from __future__ import annotations

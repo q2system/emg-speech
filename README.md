@@ -12,6 +12,7 @@ built so that the part students need to read is intentionally tiny:
 | Train a model | `python train.py` | Dataset → checkpoint |
 | Recognise live | `python recognize.py` | Checkpoint → text |
 | Test without hardware | `python simulate.py --pty` | Fake ESP32 stream |
+| See every pipeline step | `python pipeline_walkthrough.py --data dataset_demo` | Plotted tour from saved examples and model architecture through training |
 
 The only student-facing programs are:
 
@@ -22,6 +23,8 @@ train.py                 train a classifier (with printed steps)
 recognize.py             run live recognition (with printed steps)
 simulate.py              create a fake ESP32 stream
 inspect_take.py          load and print one saved example
+pipeline_walkthrough.py  plot every step from saved examples to training
+helper_lib/              plot setup and longer helpers for the walkthrough
 docs/STUDENT_GUIDE.md    the classroom explanation
 ```
 
@@ -100,6 +103,8 @@ train.py                    direct entry script: train a model
 recognize.py                direct entry script: live recognition
 simulate.py                 direct entry script: fake serial stream
 inspect_take.py             view one saved .npy example
+pipeline_walkthrough.py     plotted classroom tour of the whole pipeline
+helper_lib/                 plotting and training helpers for that tour
 _bootstrap.py               lets the scripts import from src/ in a checkout
 
 src/
@@ -261,9 +266,22 @@ checkpoint embeds:
 * label map
 * `DspConfig` and `DetectionConfig`
 * normalisation statistics
-* metrics (accuracy, macro-F1, confusion matrix, class counts)
+* metrics (training and validation accuracy, error rate, sensitivity,
+  specificity, precision and macro-F1, plus the validation confusion matrix and
+  class counts)
 
 so inference can never drift from training.
+
+After training finishes, `train.py` restores the best checkpoint and prints a
+table with those six metrics for both the training and validation splits.
+Sensitivity, specificity, precision and F1 are macro-averaged over the classes
+(one-vs-rest), which keeps them meaningful for more than two words.  The same
+values are written to `<model>_history.json` and embedded in the checkpoint.
+
+For a plotted classroom tour of every step, run
+`python pipeline_walkthrough.py --data dataset_demo`.  It starts from saved
+`.npy` examples, so no hardware is needed.  The main file stays short; plot
+setup and the longer helpers are in `helper_lib/`.
 
 ### Streaming inference
 
