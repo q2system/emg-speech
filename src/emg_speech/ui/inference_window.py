@@ -34,6 +34,7 @@ from emg_speech.inference import Prediction
 from emg_speech.model import CheckpointError, CheckpointSummary, read_checkpoint_summary
 from emg_speech.sources import ReplaySource, SerialSource
 
+from .speech import SpeechOutput
 from .theme import ACCENT, DANGER, INFO, MUTED, TEXT, WARNING
 from .widgets import LevelMeter, LiveWaveform, PortSelector
 from .workers import InferenceThread, Telemetry
@@ -65,6 +66,7 @@ class InferenceWindow(QMainWindow):
         self._stopping = False
         self._last_error: str | None = None
         self._words: list[str] = []
+        self._speech = SpeechOutput(self)
 
         self._build_ui()
         self._wire_signals()
@@ -210,6 +212,16 @@ class InferenceWindow(QMainWindow):
         self._word_count.setObjectName("muted")
         toolbar.addWidget(self._word_count)
         toolbar.addStretch(1)
+        self._speak_words = QCheckBox("Speak words")
+        if self._speech.available:
+            self._speak_words.setToolTip(
+                "Read each accepted prediction aloud using the system "
+                "text-to-speech engine."
+            )
+        else:
+            self._speak_words.setEnabled(False)
+            self._speak_words.setToolTip(self._speech.error)
+        toolbar.addWidget(self._speak_words)
         self._clear_button = QPushButton("Clear")
         self._copy_button = QPushButton("Copy")
         self._save_button = QPushButton("Save…")
@@ -260,6 +272,7 @@ class InferenceWindow(QMainWindow):
         self._clear_button.clicked.connect(self._clear_transcript)
         self._copy_button.clicked.connect(self._copy_transcript)
         self._save_button.clicked.connect(self._save_transcript)
+        self._speak_words.toggled.connect(self._speech_toggled)
         self._port_selector.selection_changed.connect(lambda _: self._update_buttons())
         self._port_selector.connect_requested.connect(self._connect_from_selector)
         self._port_selector.disconnect_requested.connect(self._stop_from_selector)
@@ -380,6 +393,7 @@ class InferenceWindow(QMainWindow):
         if self._thread is None:
             return
         self._stopping = True
+        self._speech.stop()
         self._thread.stop()
         self._status_message("Stopping…")
         self._update_buttons()
@@ -487,6 +501,7 @@ class InferenceWindow(QMainWindow):
         self._status_latency.setText(f"inference: {prediction.latency_ms:.1f} ms")
         if prediction.accepted:
             self._append_word(prediction.label)
+            self._speak_if_enabled(prediction.label)
             self._last_label.setStyleSheet(f"color: {TEXT};")
             self._last_label.setText(
                 f"“{prediction.label}” · {prediction.confidence:.0%} confidence · "
@@ -500,6 +515,25 @@ class InferenceWindow(QMainWindow):
                 f"{prediction.confidence:.0%} is below the "
                 f"{self._min_confidence:.0%} acceptance threshold."
             )
+
+    # ---------------------------------------------------------------- speech
+    def _speech_toggled(self, enabled: bool) -> None:
+        if enabled:
+            self._status_message("Speak words enabled.")
+            return
+        self._speech.stop()
+
+    def _speak_if_enabled(self, word: str) -> None:
+        if not self._speak_words.isChecked():
+            return
+        if self._speech.say(word):
+            return
+        self._speak_words.setChecked(False)
+        self._speak_words.setEnabled(False)
+        self._speak_words.setToolTip(self._speech.error)
+        self._status_message(
+            f"Speech output unavailable: {self._speech.error}", WARNING
+        )
 
     # ------------------------------------------------------------ transcript
     def _append_word(self, word: str) -> None:
@@ -587,4 +621,5 @@ class InferenceWindow(QMainWindow):
                 self._thread.terminate()
                 self._thread.wait(1000)
             self._thread = None
+        self._speech.shutdown()
         super().closeEvent(event)

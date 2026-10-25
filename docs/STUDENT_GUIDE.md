@@ -79,7 +79,10 @@ recognize("artifacts/model.pt")
 ```
 
 This opens the live window.  The library reads the serial stream, detects a
-burst, classifies it, and adds the predicted word to the transcript.
+burst, classifies it, and adds the predicted word to the transcript.  The
+**Speak words** checkbox also reads accepted predictions aloud through the
+system text-to-speech engine.  It is off by default and is disabled when the
+computer has no usable speech engine.
 
 ## See every step with plots
 

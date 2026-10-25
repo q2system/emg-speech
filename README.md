@@ -314,12 +314,14 @@ reference. They never call `read()`, `sosfilt()` or `model()` directly.
   button (mouse or Space).
 * **Inference** — checkpoint picker with metrics, confidence slider, calibration
   progress, last-prediction detail, and a large transcript with Clear / Copy /
-  Save. The **Connect/Disconnect** button in the port selector and the **Start
-  listening** button control the same stream. The live view is a fixed-window
-  strip chart (it scrolls instead of shrinking the whole session): the default
-  view is the detection envelope, and **All 9 signals** shows every filtered
-  channel z-scored per channel. The envelope threshold stays visible in both
-  views.
+  Save. The **Speak words** checkbox reads accepted predictions aloud with the
+  system text-to-speech engine; it is off by default and is disabled when no
+  engine is available. The **Connect/Disconnect** button in the port selector
+  and the **Start listening** button control the same stream. The live view is a
+  fixed-window strip chart (it scrolls instead of shrinking the whole session):
+  the default view is the detection envelope, and **All 9 signals** shows every
+  filtered channel z-scored per channel. The envelope threshold stays visible in
+  both views.
 
 Threading contract:
 
