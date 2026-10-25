@@ -44,6 +44,9 @@ This opens the acquisition window.  Hold the record button, say the word, and
 release.  The library detects the muscle burst and saves a normalised example
 under `dataset/<word>/`.
 
+Double-click a class name to link an optional sentence to it.  The sentence is
+stored in `dataset/dataset.json` and copied into the checkpoint during training.
+
 ### 2. Train
 
 ```python
@@ -55,8 +58,8 @@ print(report.summary())
 
 This reads every saved example, splits it into training and validation sets,
 trains the neural network, and writes one checkpoint file.  The checkpoint
-contains the model weights, the label names, and the DSP settings needed by
-recognition.
+contains the model weights, the label names, any linked class sentences, and the
+DSP settings needed by recognition.
 
 When training finishes, `report.summary()` shows these scores for both the
 training and validation sets:
@@ -79,9 +82,10 @@ recognize("artifacts/model.pt")
 ```
 
 This opens the live window.  The library reads the serial stream, detects a
-burst, classifies it, and adds the predicted word to the transcript.  The
-**Speak words** checkbox also reads accepted predictions aloud through the
-system text-to-speech engine.  It is off by default and is disabled when the
+burst, classifies it, and adds the predicted word to the transcript.  If the
+class has a linked sentence, the transcript shows that sentence instead.  The
+**Speak words** checkbox also reads the displayed word or sentence aloud through
+the system text-to-speech engine.  It is off by default and is disabled when the
 computer has no usable speech engine.
 
 ## See every step with plots

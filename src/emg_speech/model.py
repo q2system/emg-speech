@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -166,6 +166,7 @@ class CheckpointInfo:
     trained_at: str
     dataset_root: str
     path: Path
+    class_sentences: dict[str, str] = field(default_factory=dict)
 
     @property
     def n_classes(self) -> int:
@@ -184,6 +185,22 @@ class CheckpointSummary:
     metrics: dict[str, Any]
     trained_at: str
     n_parameters: int
+    class_sentences: dict[str, str] = field(default_factory=dict)
+
+
+def _normalise_class_sentences(
+    value: Any, label_map: list[str]
+) -> dict[str, str]:
+    if not isinstance(value, Mapping):
+        return {}
+    labels = set(label_map)
+    sentences: dict[str, str] = {}
+    for raw_label, raw_sentence in value.items():
+        label = str(raw_label)
+        sentence = str(raw_sentence).strip()
+        if label in labels and sentence:
+            sentences[label] = sentence
+    return sentences
 
 
 def _read_payload(path: str | Path) -> dict[str, Any]:
@@ -232,6 +249,9 @@ def read_checkpoint_summary(path: str | Path) -> CheckpointSummary:
         metrics=dict(payload.get("metrics", {})),
         trained_at=str(payload.get("trained_at", "")),
         n_parameters=n_parameters,
+        class_sentences=_normalise_class_sentences(
+            payload.get("class_sentences", {}), label_map
+        ),
     )
 
 
@@ -240,6 +260,7 @@ def save_checkpoint(
     model: EMGSequenceClassifier,
     *,
     label_map: list[str],
+    class_sentences: Mapping[str, str] | None = None,
     dsp_config: DspConfig,
     detection_config: DetectionConfig,
     metrics: Mapping[str, Any],
@@ -250,10 +271,12 @@ def save_checkpoint(
 
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
+    labels = list(label_map)
     payload: dict[str, Any] = {
         "format_version": CHECKPOINT_FORMAT_VERSION,
         "state_dict": {key: value.detach().cpu() for key, value in model.state_dict().items()},
-        "label_map": list(label_map),
+        "label_map": labels,
+        "class_sentences": _normalise_class_sentences(class_sentences or {}, labels),
         "model_config": model.config.to_dict(),
         "dsp_config": dsp_config.to_dict(),
         "detection_config": detection_config.to_dict(),
@@ -314,4 +337,7 @@ def load_checkpoint(
         trained_at=str(payload.get("trained_at", "")),
         dataset_root=str(payload.get("dataset_root", "")),
         path=source,
+        class_sentences=_normalise_class_sentences(
+            payload.get("class_sentences", {}), label_map
+        ),
     )

@@ -388,6 +388,7 @@ class DatasetMeta:
     channels: tuple[str, ...] = CHANNELS
     dsp: dict[str, Any] = field(default_factory=dict)
     detection: dict[str, Any] = field(default_factory=dict)
+    class_sentences: dict[str, str] = field(default_factory=dict)
     format_version: int = DATASET_FORMAT_VERSION
     created_at: str = field(default_factory=utc_now_iso)
 
@@ -415,6 +416,15 @@ class DatasetMeta:
         payload = _known_kwargs(cls, data)
         if "channels" in payload:
             payload["channels"] = tuple(payload["channels"])
+        raw_sentences = payload.get("class_sentences")
+        if isinstance(raw_sentences, Mapping):
+            payload["class_sentences"] = {
+                str(name): str(sentence).strip()
+                for name, sentence in raw_sentences.items()
+                if str(sentence).strip()
+            }
+        elif raw_sentences is not None:
+            payload["class_sentences"] = {}
         return cls(**payload)
 
     @property

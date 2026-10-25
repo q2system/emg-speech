@@ -146,6 +146,64 @@ def test_inference_defaults_to_envelope_and_toggles_all_signals(qt_app) -> None:
         window.close()
 
 
+def test_acquisition_class_sentence_dialog_persists_and_clears(
+    tmp_path, qt_app, monkeypatch
+) -> None:
+    from PyQt6.QtWidgets import QDialog
+
+    from emg_speech.config import DatasetMeta
+    from emg_speech.storage import ensure_class
+    from emg_speech.ui import acquisition_window as module
+
+    ensure_class(tmp_path, "hello")
+    window = module.AcquisitionWindow(tmp_path)
+
+    class FakeDialog:
+        def __init__(self, class_name, sentence="", parent=None) -> None:
+            assert class_name == "hello"
+            assert sentence == ""
+
+        def exec(self):
+            return QDialog.DialogCode.Accepted
+
+        def sentence(self) -> str:
+            return "Please bring me some water"
+
+    monkeypatch.setattr(module, "ClassSentenceDialog", FakeDialog)
+    try:
+        window._edit_class_sentence(window._class_list.item(0))
+        meta = DatasetMeta.load(tmp_path)
+        assert meta is not None
+        assert meta.class_sentences == {
+            "hello": "Please bring me some water"
+        }
+        item = window._class_list.item(0)
+        assert "Please bring me some water" in item.text()
+        assert "Please bring me some water" in item.toolTip()
+
+        window._seq_len.setValue(window._seq_len.value() + 16)
+        meta = DatasetMeta.load(tmp_path)
+        assert meta is not None
+        assert meta.class_sentences == {
+            "hello": "Please bring me some water"
+        }
+
+        assert window._set_class_sentence("hello", "")
+        meta = DatasetMeta.load(tmp_path)
+        assert meta is not None
+        assert meta.class_sentences == {}
+        assert "Please bring me some water" not in window._class_list.item(0).text()
+
+        assert window._set_class_sentence("hello", "Goodbye now")
+        window._delete_class()
+        meta = DatasetMeta.load(tmp_path)
+        assert meta is not None
+        assert meta.class_sentences == {}
+        assert not (tmp_path / "hello").exists()
+    finally:
+        window.close()
+
+
 def test_inference_connect_button_starts_and_stops(monkeypatch, qt_app) -> None:
     from emg_speech.ui.inference_window import InferenceWindow
 

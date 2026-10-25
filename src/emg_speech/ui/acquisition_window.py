@@ -13,6 +13,8 @@ from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QDoubleSpinBox,
     QFormLayout,
     QGroupBox,
@@ -50,6 +52,7 @@ from emg_speech.config import (
 )
 from emg_speech.constants import CHANNELS
 from emg_speech.dsp import NoiseProfile, StreamingPipeline
+from emg_speech.jsonio import JsonIOError
 from emg_speech.ring_buffer import FrameRingBuffer
 from emg_speech.sources import SerialSource
 from emg_speech.storage import (
@@ -66,6 +69,57 @@ from emg_speech.storage import (
 from .theme import ACCENT, DANGER, INFO, MUTED, WARNING
 from .widgets import LevelMeter, LiveWaveform, PortSelector, StaticWaveform
 from .workers import ExtractionTask, SerialReaderThread
+
+
+class ClassSentenceDialog(QDialog):
+    """Dialog for editing the optional sentence linked to one class."""
+
+    def __init__(
+        self,
+        class_name: str,
+        sentence: str = "",
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Class sentence")
+        self.setModal(True)
+        self.setMinimumWidth(480)
+        layout = QVBoxLayout(self)
+
+        title = QLabel(f"Sentence linked to “{class_name}”")
+        title.setWordWrap(True)
+        layout.addWidget(title)
+
+        self._sentence = QLineEdit(sentence)
+        self._sentence.setPlaceholderText("e.g. Please bring me some water")
+        self._sentence.setClearButtonEnabled(True)
+        self._sentence.setToolTip(
+            "Shown in the transcript and spoken by the recognition window. "
+            "Leave empty to use the class name instead."
+        )
+        layout.addWidget(self._sentence)
+
+        hint = QLabel(
+            "When this class is detected, the recognition window shows and "
+            "speaks this sentence. Leave it empty to use the class name."
+        )
+        hint.setWordWrap(True)
+        hint.setObjectName("muted")
+        layout.addWidget(hint)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save
+            | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+        self._sentence.returnPressed.connect(self.accept)
+        self._sentence.setFocus()
+
+    def sentence(self) -> str:
+        return self._sentence.text().strip()
 
 
 class AcquisitionWindow(QMainWindow):
@@ -183,6 +237,9 @@ class AcquisitionWindow(QMainWindow):
 
         self._class_list = QListWidget()
         self._class_list.setAlternatingRowColors(False)
+        self._class_list.setToolTip(
+            "Double-click a class to link an optional sentence to it."
+        )
         layout.addWidget(self._class_list, 1)
 
         add_row = QHBoxLayout()
@@ -207,7 +264,8 @@ class AcquisitionWindow(QMainWindow):
         layout.addWidget(self._class_total)
 
         hint = QLabel(
-            "Tip: keep 20–40 clean takes per word. Empty folders never reach training."
+            "Tip: keep 20–40 clean takes per word. Double-click a class to link "
+            "a sentence. Empty folders never reach training."
         )
         hint.setWordWrap(True)
         hint.setObjectName("muted")
@@ -355,6 +413,7 @@ class AcquisitionWindow(QMainWindow):
         self._delete_class_button.clicked.connect(self._delete_class)
         self._open_folder_button.clicked.connect(self._open_folder)
         self._class_list.currentItemChanged.connect(self._on_class_changed)
+        self._class_list.itemDoubleClicked.connect(self._edit_class_sentence)
         self._delete_take_button.clicked.connect(self._delete_last_take)
 
         self._port_selector.connect_requested.connect(self._connect_serial)
@@ -385,11 +444,13 @@ class AcquisitionWindow(QMainWindow):
             # No takes exist yet, so the project config may define the new
             # dataset contract.  Persist it now so dataset.json is consistent
             # even before the first recording.
+            sentences = dict(meta.class_sentences) if meta is not None else {}
             self._base_dsp = self._project_config.dsp
             self._base_detection = self._project_config.detection
             self._meta = DatasetMeta.from_configs(
                 self._base_dsp, self._base_detection
             )
+            self._meta.class_sentences = sentences
             self._meta.save(self._dataset_root)
         elif has_samples and self._project_config is not None:
             # Once samples exist their metadata is authoritative.  Explain the
@@ -471,7 +532,9 @@ class AcquisitionWindow(QMainWindow):
             self._state_hint.setText(str(exc))
             return
         self._base_dsp = dsp
+        sentences = dict(self._meta.class_sentences) if self._meta else {}
         self._meta = DatasetMeta.from_configs(dsp, detection)
+        self._meta.class_sentences = sentences
         self._meta.save(self._dataset_root)
         self._reset_stream_state()
         self._set_state("Ready", ACCENT)
@@ -491,7 +554,9 @@ class AcquisitionWindow(QMainWindow):
         self._base_detection = detection
         if not self._settings_locked:
             dsp = self._current_dsp_config()
+            sentences = dict(self._meta.class_sentences) if self._meta else {}
             self._meta = DatasetMeta.from_configs(dsp, detection)
+            self._meta.class_sentences = sentences
             self._meta.save(self._dataset_root)
 
     def _reset_stream_state(self) -> None:
@@ -519,9 +584,25 @@ class AcquisitionWindow(QMainWindow):
         self._class_list.blockSignals(True)
         self._class_list.clear()
         classes = list_classes(self._dataset_root)
+        sentences = self._class_sentences()
         for info in classes:
-            item = QListWidgetItem(f"{info.name}  ·  {info.count}")
+            sentence = sentences.get(info.name, "")
+            text = f"{info.name}  ·  {info.count}"
+            if sentence:
+                preview = sentence if len(sentence) <= 30 else f"{sentence[:29]}…"
+                text += f"  ·  “{preview}”"
+            item = QListWidgetItem(text)
             item.setData(Qt.ItemDataRole.UserRole, info.name)
+            if sentence:
+                item.setToolTip(
+                    f"{info.name}: {info.count} take(s)\n"
+                    f"Sentence: {sentence}"
+                )
+            else:
+                item.setToolTip(
+                    f"{info.name}: {info.count} take(s)\n"
+                    "Double-click to link a sentence."
+                )
             self._class_list.addItem(item)
             if info.name == current:
                 self._class_list.setCurrentItem(item)
@@ -532,12 +613,67 @@ class AcquisitionWindow(QMainWindow):
             self._class_list.setCurrentRow(0)
         self._on_class_changed()
 
+    def _class_sentences(self) -> dict[str, str]:
+        meta = self._meta
+        if meta is None:
+            meta = DatasetMeta.load(self._dataset_root)
+        return dict(meta.class_sentences) if meta is not None else {}
+
     def _selected_class(self) -> str | None:
         item = self._class_list.currentItem()
         if item is None:
             return None
         value = item.data(Qt.ItemDataRole.UserRole)
         return str(value) if value else None
+
+    def _edit_class_sentence(self, item: QListWidgetItem) -> None:
+        value = item.data(Qt.ItemDataRole.UserRole)
+        if not value:
+            return
+        class_name = str(value)
+        current = self._class_sentences().get(class_name, "")
+        dialog = ClassSentenceDialog(class_name, current, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        self._set_class_sentence(class_name, dialog.sentence())
+
+    def _set_class_sentence(self, class_name: str, sentence: str) -> bool:
+        meta = self._meta
+        if meta is None:
+            meta = DatasetMeta.load(self._dataset_root)
+        if meta is None:
+            try:
+                dsp = self._current_dsp_config()
+                detection = self._current_detection_config()
+            except ValueError:
+                dsp = self._base_dsp
+                detection = self._base_detection
+            meta = DatasetMeta.from_configs(dsp, detection)
+
+        cleaned = sentence.strip()
+        if cleaned:
+            meta.class_sentences[class_name] = cleaned
+        else:
+            meta.class_sentences.pop(class_name, None)
+        try:
+            meta.save(self._dataset_root)
+        except (OSError, JsonIOError) as exc:
+            QMessageBox.warning(self, "Could not save sentence", str(exc))
+            return False
+
+        self._meta = meta
+        self._refresh_classes(select=class_name)
+        if cleaned:
+            self._set_state("Sentence linked", ACCENT)
+            self._state_hint.setText(
+                f"Class '{class_name}' will display and speak: “{cleaned}”."
+            )
+        else:
+            self._set_state("Sentence cleared", MUTED)
+            self._state_hint.setText(
+                f"Class '{class_name}' has no sentence; the class name is used."
+            )
+        return True
 
     def _add_class(self) -> None:
         raw = self._new_class.text().strip()
@@ -567,6 +703,12 @@ class AcquisitionWindow(QMainWindow):
         except DatasetError as exc:
             QMessageBox.warning(self, "Cannot delete class", str(exc))
             return
+        if self._meta is not None and name in self._meta.class_sentences:
+            self._meta.class_sentences.pop(name, None)
+            try:
+                self._meta.save(self._dataset_root)
+            except (OSError, JsonIOError) as exc:
+                QMessageBox.warning(self, "Could not update dataset metadata", str(exc))
         self._refresh_classes()
         self._apply_settings_lock()
         self._set_state("Class deleted", MUTED)

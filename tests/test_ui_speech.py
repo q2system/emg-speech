@@ -25,7 +25,9 @@ class FakeSpeech:
         self.shutdown_calls += 1
 
 
-def _prediction(label: str, *, accepted: bool = True) -> Prediction:
+def _prediction(
+    label: str, *, accepted: bool = True, output_text: str = ""
+) -> Prediction:
     return Prediction(
         label=label,
         confidence=0.9,
@@ -34,6 +36,7 @@ def _prediction(label: str, *, accepted: bool = True) -> Prediction:
         event_ms=250.0,
         latency_ms=12.0,
         timestamp=0.0,
+        output_text=output_text,
     )
 
 
@@ -71,6 +74,28 @@ def test_inference_speaks_only_accepted_words_when_enabled(qt_app) -> None:
         assert speech.stop_calls >= 1
         window._on_prediction(_prediction("gamma"))
         assert speech.spoken == ["alpha"]
+    finally:
+        window.close()
+
+
+def test_inference_uses_linked_sentence_for_transcript_and_speech(qt_app) -> None:
+    from emg_speech.ui.inference_window import InferenceWindow
+
+    window = InferenceWindow()
+    try:
+        speech = FakeSpeech()
+        window._speech = speech
+        window._speak_words.setEnabled(True)
+        window._speak_words.setChecked(True)
+
+        window._on_prediction(
+            _prediction("alpha", output_text="Please bring me some water")
+        )
+
+        assert window._transcript.toPlainText() == "Please bring me some water"
+        assert speech.spoken == ["Please bring me some water"]
+        assert "Please bring me some water" in window._last_label.text()
+        assert "[alpha]" in window._last_label.text()
     finally:
         window.close()
 

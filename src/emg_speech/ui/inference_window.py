@@ -208,7 +208,7 @@ class InferenceWindow(QMainWindow):
         self._state_label = QLabel("Idle")
         self._state_label.setObjectName("badge")
         toolbar.addWidget(self._state_label)
-        self._word_count = QLabel("0 words")
+        self._word_count = QLabel("0 items")
         self._word_count.setObjectName("muted")
         toolbar.addWidget(self._word_count)
         toolbar.addStretch(1)
@@ -234,7 +234,7 @@ class InferenceWindow(QMainWindow):
         self._transcript.setObjectName("transcript")
         self._transcript.setReadOnly(True)
         self._transcript.setPlaceholderText(
-            "Recognised words will appear here as you speak…"
+            "Recognised words and linked sentences will appear here as you speak…"
         )
         layout.addWidget(self._transcript, 1)
 
@@ -313,6 +313,18 @@ class InferenceWindow(QMainWindow):
         self._classes_label.setText(
             f"Classes ({len(summary.label_map)}): {classes}"
         )
+        if summary.class_sentences:
+            self._classes_label.setToolTip(
+                "Linked sentences:\n"
+                + "\n".join(
+                    f"{label} → {sentence}"
+                    for label, sentence in summary.class_sentences.items()
+                )
+            )
+        else:
+            self._classes_label.setToolTip(
+                "This checkpoint has no linked class sentences."
+            )
         metrics = summary.metrics
         pieces: list[str] = []
         if "val_accuracy" in metrics:
@@ -499,13 +511,19 @@ class InferenceWindow(QMainWindow):
 
     def _on_prediction(self, prediction: Prediction) -> None:
         self._status_latency.setText(f"inference: {prediction.latency_ms:.1f} ms")
+        output_text = prediction.output_text or prediction.label
         if prediction.accepted:
-            self._append_word(prediction.label)
-            self._speak_if_enabled(prediction.label)
+            self._append_word(output_text)
+            self._speak_if_enabled(output_text)
             self._last_label.setStyleSheet(f"color: {TEXT};")
+            class_note = (
+                f" [{prediction.label}]"
+                if output_text != prediction.label
+                else ""
+            )
             self._last_label.setText(
-                f"“{prediction.label}” · {prediction.confidence:.0%} confidence · "
-                f"{prediction.event_ms:.0f} ms burst · "
+                f"“{output_text}”{class_note} · {prediction.confidence:.0%} "
+                f"confidence · {prediction.event_ms:.0f} ms burst · "
                 f"{prediction.latency_ms:.1f} ms model latency"
             )
         else:
@@ -523,10 +541,10 @@ class InferenceWindow(QMainWindow):
             return
         self._speech.stop()
 
-    def _speak_if_enabled(self, word: str) -> None:
+    def _speak_if_enabled(self, text: str) -> None:
         if not self._speak_words.isChecked():
             return
-        if self._speech.say(word):
+        if self._speech.say(text):
             return
         self._speak_words.setChecked(False)
         self._speak_words.setEnabled(False)
@@ -536,20 +554,21 @@ class InferenceWindow(QMainWindow):
         )
 
     # ------------------------------------------------------------ transcript
-    def _append_word(self, word: str) -> None:
+    def _append_word(self, text: str) -> None:
         cursor = self._transcript.textCursor()
         cursor.movePosition(QTextCursor.MoveOperation.End)
         self._transcript.setTextCursor(cursor)
         separator = " " if self._transcript.toPlainText() else ""
-        self._transcript.insertPlainText(f"{separator}{word}")
+        self._transcript.insertPlainText(f"{separator}{text}")
         self._transcript.ensureCursorVisible()
-        self._words.append(word)
-        self._word_count.setText(f"{len(self._words)} words")
+        self._words.append(text)
+        count = len(self._words)
+        self._word_count.setText(f"{count} item{'s' if count != 1 else ''}")
 
     def _clear_transcript(self) -> None:
         self._transcript.clear()
         self._words.clear()
-        self._word_count.setText("0 words")
+        self._word_count.setText("0 items")
         self._last_label.setText("Transcript cleared.")
         self._last_label.setStyleSheet(f"color: {MUTED};")
 

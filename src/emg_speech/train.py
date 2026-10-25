@@ -463,6 +463,7 @@ def train(
         "dataset": str(index.root),
         "label_map": index.label_map,
         "class_counts": index.counts(),
+        "class_sentences": index.class_sentences,
         "train_config": cfg.to_dict(),
         "model_config": mcfg.to_dict(),
         "dsp_config": index.meta.dsp,
@@ -522,6 +523,7 @@ def train(
                 target,
                 model,
                 label_map=index.label_map,
+                class_sentences=index.class_sentences,
                 dsp_config=index.meta.dsp_config,
                 detection_config=index.meta.detection_config,
                 metrics={

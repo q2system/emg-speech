@@ -39,6 +39,8 @@ class Prediction:
     event_ms: float
     latency_ms: float
     timestamp: float
+    #: Sentence linked to the predicted class, or the class name when none exists.
+    output_text: str = ""
 
 
 class StreamingRecognizer:
@@ -60,6 +62,7 @@ class StreamingRecognizer:
             raise ValueError("min_confidence must be in [0, 1]")
         self.checkpoint = checkpoint
         self.label_map = list(checkpoint.label_map)
+        self.class_sentences = dict(checkpoint.class_sentences)
         self.min_confidence = float(min_confidence)
         self._device = torch.device(device)
         self._model = checkpoint.model.to(self._device).eval()
@@ -236,14 +239,16 @@ class StreamingRecognizer:
 
         index = int(np.argmax(probabilities))
         confidence = float(probabilities[index])
+        label = self.label_map[index] if index < len(self.label_map) else "?"
         return Prediction(
-            label=self.label_map[index] if index < len(self.label_map) else "?",
+            label=label,
             confidence=confidence,
             probabilities=probabilities,
             accepted=confidence >= self.min_confidence,
             event_ms=span.duration_ms(self._dsp.sample_rate),
             latency_ms=latency_ms,
             timestamp=time.time(),
+            output_text=self.class_sentences.get(label, label),
         )
 
     def _crop(self, span: EventSpan) -> NDArray[np.float32] | None:

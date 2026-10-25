@@ -41,6 +41,16 @@ class DatasetIndex:
         values, counts = np.unique(self.labels, return_counts=True)
         return {self.label_map[int(v)]: int(c) for v, c in zip(values, counts)}
 
+    @property
+    def class_sentences(self) -> dict[str, str]:
+        """Sentences linked to classes that survived validation."""
+
+        return {
+            label: self.meta.class_sentences[label].strip()
+            for label in self.label_map
+            if self.meta.class_sentences.get(label, "").strip()
+        }
+
     @classmethod
     def build(cls, dataset_root: str | Path) -> "DatasetIndex":
         root = Path(dataset_root).expanduser().resolve()

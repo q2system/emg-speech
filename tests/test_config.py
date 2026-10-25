@@ -43,6 +43,7 @@ def test_meta_roundtrip_keeps_dsp_and_detection(tmp_path) -> None:
     dsp = DspConfig(sample_rate=1000.0, seq_len=64)
     detection = DetectionConfig(on_sigma=5.0)
     meta = DatasetMeta.from_configs(dsp, detection)
+    meta.class_sentences["hello"] = "Please bring me some water"
     path = meta.save(tmp_path)
 
     restored = DatasetMeta.load(tmp_path)
@@ -51,6 +52,18 @@ def test_meta_roundtrip_keeps_dsp_and_detection(tmp_path) -> None:
     assert restored.dsp_config.sample_rate == 1000.0
     assert restored.dsp_config.seq_len == 64
     assert restored.detection_config.on_sigma == pytest.approx(5.0)
+    assert restored.class_sentences == {"hello": "Please bring me some water"}
+
+
+def test_meta_without_class_sentences_is_backward_compatible(tmp_path) -> None:
+    (tmp_path / "dataset.json").write_text(
+        json.dumps({"sample_rate": 500.0, "seq_len": 128}),
+        encoding="utf-8",
+    )
+
+    meta = DatasetMeta.load(tmp_path)
+    assert meta is not None
+    assert meta.class_sentences == {}
 
 
 def test_project_config_roundtrip(tmp_path) -> None:

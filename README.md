@@ -166,12 +166,15 @@ apps.
 ### Workflow
 
 1. Create a class ("Add" → folder `dataset/<word>/`).
-2. Select the class, press **Connect**.
-3. **Hold** the record button (or Space), say/subvocalise the word, **release**.
-4. A take is sliced as `[press − 350 ms pre-roll, release + 250 ms tail]`.
-5. DSP runs in a `QThreadPool` task: band-pass → envelope → burst detection →
+2. **Double-click** a class to link an optional sentence. When that class is
+   detected, recognition shows and speaks the sentence instead of the bare class
+   name; leave it empty to keep the class name.
+3. Select the class, press **Connect**.
+4. **Hold** the record button (or Space), say/subvocalise the word, **release**.
+5. A take is sliced as `[press − 350 ms pre-roll, release + 250 ms tail]`.
+6. DSP runs in a `QThreadPool` task: band-pass → envelope → burst detection →
    crop with margins → resample to `seq_len` → save atomically.
-6. The preview shows the three EMG channels by default (**EMG only** is ticked).
+7. The preview shows the three EMG channels by default (**EMG only** is ticked).
    Untick it to show all nine accepted-take channels (EMG and IMU, z-scored per
    channel for readability). Rejected takes display the measured peak vs.
    threshold, so you can fix electrode contact or `on_sigma`.
@@ -263,7 +266,7 @@ The loop uses `CrossEntropyLoss` (inverse-frequency class weights by default),
 checkpoint embeds:
 
 * model `state_dict` + `ModelConfig`
-* label map
+* label map and linked class sentences
 * `DspConfig` and `DetectionConfig`
 * normalisation statistics
 * metrics (training and validation accuracy, error rate, sensitivity,
@@ -311,17 +314,19 @@ reference. They never call `read()`, `sosfilt()` or `model()` directly.
 
 * **Acquisition** — class list, 30 fps scrolling envelope with threshold line,
   live level meter, normalised take preview, detection settings, hold-to-record
-  button (mouse or Space).
+  button (mouse or Space). Double-clicking a class opens a dialog where you can
+  link an optional sentence to that class.
 * **Inference** — checkpoint picker with metrics, confidence slider, calibration
   progress, last-prediction detail, and a large transcript with Clear / Copy /
-  Save. The **Speak words** checkbox reads accepted predictions aloud with the
-  system text-to-speech engine; it is off by default and is disabled when no
-  engine is available. The **Connect/Disconnect** button in the port selector
-  and the **Start listening** button control the same stream. The live view is a
-  fixed-window strip chart (it scrolls instead of shrinking the whole session):
-  the default view is the detection envelope, and **All 9 signals** shows every
-  filtered channel z-scored per channel. The envelope threshold stays visible in
-  both views.
+  Save. Accepted predictions show the class’s linked sentence when one exists
+  (otherwise the class name). The **Speak words** checkbox reads that same text
+  aloud with the system text-to-speech engine; it is off by default and is
+  disabled when no engine is available. The **Connect/Disconnect** button in the
+  port selector and the **Start listening** button control the same stream. The
+  live view is a fixed-window strip chart (it scrolls instead of shrinking the
+  whole session): the default view is the detection envelope, and **All 9
+  signals** shows every filtered channel z-scored per channel. The envelope
+  threshold stays visible in both views.
 
 Threading contract:
 
@@ -594,12 +599,13 @@ Notes:
 QT_QPA_PLATFORM=offscreen PYTHONPATH=. python -m pytest -q
 ```
 
-83 tests cover protocol edge cases, filter/detector behaviour, normalisation,
+109 tests cover protocol edge cases, filter/detector behaviour, normalisation,
 atomic storage, dataset remapping, model/checkpoint round-trips, training,
 streaming inference, the live simulator (including a POSIX PTY round-trip),
 the public library API, the four directly runnable entry scripts, layer
-boundaries and offscreen UI tests for manual COM-port entry, the 3/9-channel
-take preview, inference connect wiring, and the scrolling all-signal view.
+boundaries, class-sentence persistence, and offscreen UI tests for manual
+COM-port entry, the 3/9-channel take preview, inference connect wiring, speech
+output, and the scrolling all-signal view.
 
 ---
 
@@ -607,11 +613,14 @@ take preview, inference connect wiring, and the scrolling all-signal view.
 
 ```
 dataset/
-    dataset.json                     rate, seq_len, channel order, DSP config
+    dataset.json                     rate, seq_len, channel order, DSP config,
+                                     optional class-to-sentence links
     hello/
         hello_20261022-101500_ab12cd34.npy     (128, 9) float32
     world/
         ...
 ```
 
-Only `.npy` files are read; empty folders never reach training.
+Only `.npy` files are read; empty folders never reach training. Class sentences
+are copied into the checkpoint during training, so recognition does not need the
+original dataset folder.

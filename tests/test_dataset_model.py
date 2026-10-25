@@ -7,7 +7,7 @@ import pytest
 import torch
 from torch.utils.data import DataLoader
 
-from emg_speech.config import DetectionConfig, DspConfig, ModelConfig
+from emg_speech.config import DatasetMeta, DetectionConfig, DspConfig, ModelConfig
 from emg_speech.constants import N_CHANNELS
 from emg_speech.dataset import (
     DatasetIndex,
@@ -56,6 +56,27 @@ def test_norm_stats_and_batching(demo_dataset: Path) -> None:
     assert torch.isfinite(features).all()
 
 
+def test_index_exposes_only_linked_valid_class_sentences(
+    demo_dataset: Path, tmp_path: Path
+) -> None:
+    import shutil
+
+    root = tmp_path / "dataset"
+    shutil.copytree(demo_dataset, root)
+    labels = DatasetIndex.build(root).label_map
+    meta = DatasetMeta.load(root)
+    assert meta is not None
+    meta.class_sentences = {
+        labels[0]: "  First sentence  ",
+        labels[1]: "",
+        "missing_class": "Not in the label map",
+    }
+    meta.save(root)
+
+    index = DatasetIndex.build(root)
+    assert index.class_sentences == {labels[0]: "First sentence"}
+
+
 def test_augmentation_preserves_shape(demo_dataset: Path) -> None:
     index = DatasetIndex.build(demo_dataset)
     dataset = EMGDataset(index, augment=True, seed=1)
@@ -75,6 +96,11 @@ def test_model_forward_and_checkpoint_roundtrip(tmp_path: Path) -> None:
         tmp_path / "model.pt",
         model,
         label_map=["alpha", "beta", "gamma"],
+        class_sentences={
+            "alpha": "Please bring me some water",
+            "beta": "  ",
+            "unknown": "Ignored",
+        },
         dsp_config=DspConfig(),
         detection_config=DetectionConfig(),
         metrics={"val_accuracy": 0.9},
@@ -82,11 +108,13 @@ def test_model_forward_and_checkpoint_roundtrip(tmp_path: Path) -> None:
     )
     summary = read_checkpoint_summary(checkpoint)
     assert summary.label_map == ["alpha", "beta", "gamma"]
+    assert summary.class_sentences == {"alpha": "Please bring me some water"}
     assert summary.n_parameters > 0
     assert summary.metrics["val_accuracy"] == 0.9
 
     info = load_checkpoint(checkpoint, device="cpu")
     assert info.label_map == ["alpha", "beta", "gamma"]
+    assert info.class_sentences == {"alpha": "Please bring me some water"}
     assert info.dsp_config.seq_len == DspConfig().seq_len
     probabilities = predict_probabilities(
         info.model, np.zeros((DspConfig().seq_len, N_CHANNELS), dtype=np.float32)

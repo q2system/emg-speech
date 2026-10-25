@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from emg_speech.config import (
+    DatasetMeta,
     DetectionConfig,
     DspConfig,
     ModelConfig,
@@ -39,9 +40,20 @@ def test_classification_metrics_are_macro_averaged() -> None:
 
 
 def test_training_produces_a_deployable_checkpoint(demo_dataset: Path, tmp_path: Path) -> None:
+    import shutil
+
+    dataset_root = tmp_path / "dataset"
+    shutil.copytree(demo_dataset, dataset_root)
+    labels = DatasetIndex.build(dataset_root).label_map
+    meta = DatasetMeta.load(dataset_root)
+    assert meta is not None
+    linked = {labels[0]: "Please bring me some water"}
+    meta.class_sentences = dict(linked)
+    meta.save(dataset_root)
+
     checkpoint = tmp_path / "artifacts" / "model.pt"
     report = train(
-        demo_dataset,
+        dataset_root,
         checkpoint,
         train_config=TrainConfig(
             epochs=4,
@@ -74,7 +86,7 @@ def test_training_produces_a_deployable_checkpoint(demo_dataset: Path, tmp_path:
     assert "Sensitivity" in report.summary()
     assert "Specificity" in report.summary()
     assert "Precision" in report.summary()
-    assert set(report.label_map) == set(DatasetIndex.build(demo_dataset).label_map)
+    assert set(report.label_map) == set(labels)
 
     epoch = report.history[0]
     assert epoch.train_error == pytest.approx(1.0 - epoch.train_accuracy)
@@ -83,9 +95,11 @@ def test_training_produces_a_deployable_checkpoint(demo_dataset: Path, tmp_path:
     assert "train_sensitivity" in history["history"][0]
     assert "val_specificity" in history["history"][0]
     assert "val_precision" in history["history"][0]
+    assert history["class_sentences"] == linked
 
     info = load_checkpoint(checkpoint, device="cpu")
     assert info.label_map == report.label_map
+    assert info.class_sentences == linked
     assert info.metrics["val_accuracy"] == pytest.approx(report.best_val_accuracy)
     assert info.metrics["val_sensitivity"] == pytest.approx(
         report.val_metrics.sensitivity
@@ -138,10 +152,16 @@ def test_streaming_recognizer_end_to_end(tmp_path: Path) -> None:
     model.set_norm_stats(np.zeros(9), np.ones(9))
     dsp = DspConfig()
     detection = DetectionConfig(calibration_ms=1500)
+    sentences = {
+        "alpha": "Say alpha clearly",
+        "beta": "Say beta clearly",
+        "gamma": "Say gamma clearly",
+    }
     checkpoint = save_checkpoint(
         tmp_path / "model.pt",
         model,
         label_map=["alpha", "beta", "gamma"],
+        class_sentences=sentences,
         dsp_config=dsp,
         detection_config=detection,
         metrics={},
@@ -164,6 +184,7 @@ def test_streaming_recognizer_end_to_end(tmp_path: Path) -> None:
     assert predictions, "a clear burst must produce a prediction"
     prediction = predictions[-1]
     assert prediction.label in info.label_map
+    assert prediction.output_text == sentences[prediction.label]
     assert prediction.probabilities.shape == (3,)
     assert float(prediction.probabilities.sum()) == pytest.approx(1.0, abs=1e-4)
     assert prediction.event_ms >= detection.min_event_ms
