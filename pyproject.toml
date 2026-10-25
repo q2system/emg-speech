@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "emg-speech"
 # TODO: bump this before every PyPI upload. PyPI rejects duplicate versions.
-version = "2.5.0"
+version = "3.0.0"
 description = "Subvocal EMG speech recognition: acquisition, training and real-time inference"
 readme = "README.md"
 requires-python = ">=3.10"
