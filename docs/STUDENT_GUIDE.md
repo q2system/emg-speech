@@ -128,7 +128,12 @@ emg-config                # show the current values
 
 Use `python simulate.py --pty` to create a fake ESP32 serial port for
 testing without hardware.  The port is printed in the terminal and can be
-typed into the app.
+typed into the app.  In auto mode, `--order sequence` follows the
+comma-separated `--words` order and `--repeat N` sends each word N times:
+
+```bash
+python simulate.py --pty --words hello,world --order sequence --repeat 3
+```
 
 Every script prints its steps before doing the work.  For example,
 `record.py` prints the dataset folder, serial settings, and when the

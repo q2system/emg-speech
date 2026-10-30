@@ -58,6 +58,37 @@ def test_configure_command_can_reset(tmp_path) -> None:
     assert config.seq_len == 128
 
 
+def test_simulator_accepts_order_and_repeat(tmp_path, capsys) -> None:
+    path = tmp_path / "emg_config.json"
+    ProjectConfig(dsp=DspConfig(sample_rate=500.0, seq_len=128)).save(path)
+
+    assert (
+        simulate_main(
+            [
+                "--config",
+                str(path),
+                "--dry-run",
+                "--words",
+                "alpha,beta",
+                "--order",
+                "sequence",
+                "--repeat",
+                "2",
+                "--start-idle",
+                "0",
+                "--duration",
+                "4",
+            ]
+        )
+        == 0
+    )
+
+    output = capsys.readouterr().out
+    assert "Word order: sequence · repeat: 2" in output
+    assert "alpha" in output
+    assert "beta" in output
+
+
 def test_simulator_uses_config_sample_rate(tmp_path, capsys) -> None:
     path = tmp_path / "emg_config.json"
     ProjectConfig(dsp=DspConfig(sample_rate=1000.0, seq_len=256)).save(path)

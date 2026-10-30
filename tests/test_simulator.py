@@ -81,6 +81,73 @@ def test_auto_mode_emits_detectable_gestures() -> None:
     assert extracted.event_ms >= DetectionConfig().min_event_ms
 
 
+def test_auto_mode_defaults_to_random_single_gestures() -> None:
+    source = SimulatedSource(("alpha", "beta"))
+
+    assert source.word_order == "random"
+    assert source.repeat == 1
+    assert source.description == "simulate:alpha,beta (auto)"
+
+
+def test_auto_mode_follows_the_entered_word_sequence() -> None:
+    fs = 500.0
+    source = SimulatedSource(
+        ("alpha", "beta", "gamma"),
+        sample_rate=fs,
+        mode="auto",
+        interval_seconds=0.2,
+        start_idle_seconds=0.0,
+        seed=11,
+        word_order="sequence",
+        repeat=2,
+    )
+    source.open()
+    source.pull(int(8.0 * fs))
+    words = [cue.word for cue in source.drain_cues()]
+
+    assert len(words) >= 6
+    assert words[:6] == [
+        "alpha",
+        "alpha",
+        "beta",
+        "beta",
+        "gamma",
+        "gamma",
+    ]
+    assert source.word_order == "sequence"
+    assert source.repeat == 2
+    assert "(auto, sequence, x2)" in source.description
+
+
+def test_random_order_repeats_each_word_in_groups() -> None:
+    fs = 500.0
+    source = SimulatedSource(
+        ("alpha", "beta"),
+        sample_rate=fs,
+        mode="auto",
+        interval_seconds=0.2,
+        start_idle_seconds=0.0,
+        seed=3,
+        repeat=3,
+    )
+    source.open()
+    source.pull(int(10.0 * fs))
+    words = [cue.word for cue in source.drain_cues()]
+
+    assert len(words) >= 6
+    whole_groups = len(words) // 3
+    for index in range(whole_groups):
+        group = words[index * 3 : index * 3 + 3]
+        assert len(set(group)) == 1
+
+
+def test_invalid_word_order_and_repeat_are_rejected() -> None:
+    with pytest.raises(ValueError, match="word_order"):
+        SimulatedSource(("alpha",), word_order="shuffle")
+    with pytest.raises(ValueError, match="repeat"):
+        SimulatedSource(("alpha",), repeat=0)
+
+
 def test_manual_mode_waits_for_a_trigger() -> None:
     fs = 500.0
     source = SimulatedSource(
@@ -109,6 +176,25 @@ def test_manual_mode_waits_for_a_trigger() -> None:
         combined[start:end], DspConfig(sample_rate=fs), DetectionConfig()
     )
     assert extracted.data.shape == (128, 9)
+
+
+def test_manual_mode_can_repeat_a_triggered_word() -> None:
+    fs = 500.0
+    source = SimulatedSource(
+        ("hello",),
+        sample_rate=fs,
+        mode="manual",
+        start_idle_seconds=0.0,
+        seed=2,
+        repeat=2,
+    )
+    source.open()
+    assert source.trigger("hello") == "hello"
+    source.pull(int(3.5 * fs))
+    cues = source.drain_cues()
+
+    assert [cue.word for cue in cues] == ["hello", "hello"]
+    assert source.stats.word_counts == {"hello": 2}
 
 
 def test_manual_mode_keeps_a_continuous_imu() -> None:

@@ -8,6 +8,7 @@ Steps:
 Run:
     python simulate.py --pty
     python simulate.py --pty --mode manual --words hello,world
+    python simulate.py --pty --words hello,world --order sequence --repeat 3
     python simulate.py --port COM5 --baud 921600
     python simulate.py --pty --config emg_config.json
 """

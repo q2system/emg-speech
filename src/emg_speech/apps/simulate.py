@@ -18,6 +18,10 @@ Manual gesture control (type a word and press Enter):
 
     python simulate.py --pty --mode manual --words hello,world
 
+Auto mode with a fixed word order and repeated gestures:
+
+    python simulate.py --pty --words hello,world --order sequence --repeat 3
+
 Replay a recorded dataset instead of the synthetic generator:
 
     python simulate.py --pty --replay dataset
@@ -106,6 +110,8 @@ def _build_source(args: argparse.Namespace) -> FrameSource:
         start_idle_seconds=args.start_idle,
         idle_emg_std=args.noise,
         amplitude=args.amplitude,
+        word_order=args.order,
+        repeat=args.repeat,
     )
 
 
@@ -127,7 +133,8 @@ def _stdin_loop(source: FrameSource, stop: threading.Event) -> None:
         except ValueError as exc:
             print(f"[sim] invalid word: {exc}", file=sys.stderr, flush=True)
             continue
-        print(f"[sim] queued '{name}'", flush=True)
+        suffix = f" x{source.repeat}" if source.repeat != 1 else ""
+        print(f"[sim] queued '{name}'{suffix}", flush=True)
 
 
 def _pump(
@@ -190,6 +197,7 @@ def _dry_run(args: argparse.Namespace) -> int:
     print(f"Generated {len(frames):,} frames ({len(frames) / args.rate:.1f}s) "
           f"at {args.rate:g} Hz")
     print(f"Words: {', '.join(source.words)}")
+    print(f"Word order: {source.word_order} · repeat: {source.repeat}")
     print(f"Gestures: {source.stats.gestures}")
     for cue in cues:
         print(f"  {cue.time_s(args.rate):7.2f}s  {cue.word}")
@@ -259,6 +267,19 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--word", default=None, help="single word shorthand")
     parser.add_argument("--mode", choices=("auto", "manual"), default="auto")
+    parser.add_argument(
+        "--order",
+        choices=("random", "sequence"),
+        default="random",
+        help="auto-mode word order (default: random)",
+    )
+    parser.add_argument(
+        "--repeat",
+        type=int,
+        default=1,
+        metavar="N",
+        help="consecutive gestures of the same word (default: 1)",
+    )
     parser.add_argument("--interval", type=float, default=3.0, help="seconds between gestures (auto)")
     parser.add_argument("--start-idle", type=float, default=2.0, help="idle seconds before the first gesture")
     parser.add_argument("--noise", type=float, default=0.02, help="idle EMG standard deviation")
@@ -295,6 +316,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.rate <= 0 or args.interval <= 0:
         print("--rate and --interval must be positive", file=sys.stderr)
+        return 2
+    if args.repeat < 1:
+        print("--repeat must be at least 1", file=sys.stderr)
         return 2
 
     args.words = tuple(word.strip() for word in args.words.split(",") if word.strip())

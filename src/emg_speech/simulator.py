@@ -8,9 +8,10 @@ samples), so it exercises the complete acquisition chain:
 Two modes are available:
 
 ``auto``
-    Emit a gesture every ``interval_seconds`` using a randomly chosen word.
-    A :class:`Cue` is recorded for every gesture so the CLI/user knows when to
-    press the record button.
+    Emit a gesture every ``interval_seconds`` using a word chosen at random or
+    in the order supplied (``word_order``).  ``repeat`` controls how many
+    consecutive gestures use the same word.  A :class:`Cue` is recorded for
+    every gesture so the CLI/user knows when to press the record button.
 
 ``manual``
     Stay idle until :meth:`SimulatedSource.trigger` is called (the CLI maps
@@ -133,11 +134,17 @@ class SimulatedSource:
         idle_imu_std: float = 0.003,
         amplitude: float = 1.1,
         max_chunk: int = 4096,
+        word_order: str = "random",
+        repeat: int = 1,
     ) -> None:
         if sample_rate <= 0:
             raise ValueError("sample_rate must be positive")
         if mode not in {"auto", "manual"}:
             raise ValueError("mode must be 'auto' or 'manual'")
+        if word_order not in {"random", "sequence"}:
+            raise ValueError("word_order must be 'random' or 'sequence'")
+        if repeat < 1:
+            raise ValueError("repeat must be at least 1")
         if interval_seconds <= 0:
             raise ValueError("interval_seconds must be positive")
         if interval_jitter < 0 or interval_jitter >= 1.0:
@@ -158,6 +165,8 @@ class SimulatedSource:
         self._words = cleaned
         self._sample_rate = float(sample_rate)
         self._mode = mode
+        self._word_order = word_order
+        self._repeat = int(repeat)
         self._interval = float(interval_seconds)
         self._jitter = float(interval_jitter)
         self._start_idle = float(start_idle_seconds)
@@ -173,6 +182,9 @@ class SimulatedSource:
         self._produced = 0
         self._delivered = 0
         self._next_gesture_at = 0
+        self._word_index = 0
+        self._current_word: str | None = None
+        self._repeats_left = 0
         self._t0: float | None = None
         self._triggers: queue.SimpleQueue[str] = queue.SimpleQueue()
         self._cues: list[Cue] = []
@@ -181,7 +193,12 @@ class SimulatedSource:
     # ------------------------------------------------------------- properties
     @property
     def description(self) -> str:
-        return f"simulate:{','.join(self._words)} ({self._mode})"
+        details = [self._mode]
+        if self._mode == "auto" and self._word_order != "random":
+            details.append(self._word_order)
+        if self._repeat != 1:
+            details.append(f"x{self._repeat}")
+        return f"simulate:{','.join(self._words)} ({', '.join(details)})"
 
     @property
     def words(self) -> tuple[str, ...]:
@@ -190,6 +207,14 @@ class SimulatedSource:
     @property
     def sample_rate(self) -> float:
         return self._sample_rate
+
+    @property
+    def word_order(self) -> str:
+        return self._word_order
+
+    @property
+    def repeat(self) -> int:
+        return self._repeat
 
     @property
     def stats(self) -> SimulationStats:
@@ -206,6 +231,9 @@ class SimulatedSource:
         self._stats = SimulationStats()
         self._t0 = time.monotonic()
         self._next_gesture_at = int(round(self._start_idle * self._sample_rate))
+        self._word_index = 0
+        self._current_word = None
+        self._repeats_left = 0
 
     def close(self) -> None:
         self._t0 = None
@@ -245,12 +273,17 @@ class SimulatedSource:
 
     # ----------------------------------------------------------------- control
     def trigger(self, word: str) -> str:
-        """Queue one manual gesture; returns the sanitised word."""
+        """Queue manual gestures; returns the sanitised word.
+
+        The word is queued ``repeat`` times so manual mode honours the same
+        consecutive-repeat setting as auto mode.
+        """
 
         name = sanitize_class_name(word)
         if name not in self._words:
             self._words = (*self._words, name)
-        self._triggers.put(name)
+        for _ in range(self._repeat):
+            self._triggers.put(name)
         return name
 
     def drain_cues(self) -> list[Cue]:
@@ -267,7 +300,7 @@ class SimulatedSource:
             return self._idle_segment(start, max(1, int(round(0.05 * self._sample_rate))))
 
         if start >= self._next_gesture_at:
-            word = self._words[int(self._rng.integers(0, len(self._words)))]
+            word = self._next_auto_word()
             segment = self._gesture_segment(start, word)
             gap = self._interval * self._sample_rate
             gap *= 1.0 + float(self._rng.uniform(-self._jitter, self._jitter))
@@ -277,6 +310,22 @@ class SimulatedSource:
         remaining = self._next_gesture_at - start
         chunk = max(1, int(round(0.05 * self._sample_rate)))
         return self._idle_segment(start, min(chunk, max(1, remaining)))
+
+    def _next_auto_word(self) -> str:
+        """Return the next auto-mode word, reusing it for ``repeat`` gestures."""
+
+        if self._repeats_left <= 0 or self._current_word is None:
+            if self._word_order == "sequence":
+                word = self._words[self._word_index % len(self._words)]
+                self._word_index += 1
+            else:
+                word = self._words[int(self._rng.integers(0, len(self._words)))]
+            self._current_word = word
+            self._repeats_left = self._repeat
+        self._repeats_left -= 1
+        word = self._current_word
+        assert word is not None
+        return word
 
     def _next_trigger(self) -> str | None:
         try:

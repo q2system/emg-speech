@@ -493,8 +493,17 @@ python record.py --data dataset --port /dev/pts/7
 ```
 
 `auto` mode emits a gesture every `--interval` seconds and prints a cue; press
-and hold record around the cue. `manual` mode is best for annotation practice —
-type a word and press Enter while the record button is held:
+and hold record around the cue. By default it picks words randomly. Use
+`--order sequence` to follow the comma-separated `--words` order, and
+`--repeat N` to send the same word for N consecutive gestures (default `1`):
+
+```bash
+python simulate.py --pty --words hello,world --order sequence --repeat 3
+# hello, hello, hello, world, world, world, ...
+```
+
+`manual` mode is best for annotation practice — type a word and press Enter
+while the record button is held. A typed word is also queued `--repeat` times:
 
 ```bash
 python simulate.py --pty --mode manual --words hello,world
@@ -509,9 +518,10 @@ python simulate.py --pty --interval 1.5
 python recognize.py --checkpoint artifacts/model.pt --port /dev/pts/7
 ```
 
-Useful flags: `--noise`, `--amplitude`, `--start-idle`, `--seed`,
-`--list-ports`, and `--dry-run --duration 6` (unpaced self-test that reports
-cues, encoded frame size and whether the detector finds the burst).
+Useful flags: `--words`, `--order`, `--repeat`, `--noise`,
+`--amplitude`, `--start-idle`, `--seed`, `--list-ports`, and
+`--dry-run --duration 6` (unpaced self-test that reports cues, encoded frame
+size and whether the detector finds the burst).
 
 On **Windows**, create a null-modem pair once with
 [com0com](https://sourceforge.net/projects/com0com/) from an elevated prompt:
